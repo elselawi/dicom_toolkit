@@ -1,13 +1,31 @@
 ## 0.2.0
 
-- (BREAKING): package renamed from `flutter_dicom` to `dicom_toolkit`
-  - Update your `pubspec.yaml` dependency and all `import 'package:dicom_toolkit/dicom_toolkit.dart';` statements
-  - Rust crate renamed from `flutter_dicom` to `dicom_toolkit` (affects the native library filename on all platforms)
-  - `FlutterDicomWeb` → `DicomToolkitWeb`; `lib/flutter_dicom_web.dart` → `lib/dicom_toolkit_web.dart`
-  - `FileDicomLoader` → `RustDicomLoader`
-  - Shader asset path updated to `packages/dicom_toolkit/assets/shaders/dicom_window.frag`
-- (BREAKING): removed `DicomController.loadFromFile()`, `IDicomLoader.load()`, `DicomService.loadFrame()`, and `WebDicomLoader` — loading is now bytes-only via `loadFromBytes()` on every platform
-- (chore): project ownership and repository moved to [@elselawi](https://github.com/elselawi)
+- **(BREAKING)** package renamed from `flutter_dicom` to `dicom_toolkit`
+  - Update imports to `package:dicom_toolkit/dicom_toolkit.dart`
+  - `DicomController` → `DicomViewerController`; `DicomService` removed
+  - `FileDicomLoader` → `RustDecoder` (now implements `DicomDecoder`)
+  - Loading is bytes-only on all platforms — `loadFromBytes()` only
+- **(BREAKING)** composable toolkit API replaces monolithic controller
+  - New: `DicomParser`, `DicomRenderer`, `DicomRoi`, `DicomRuler`, `DicomExport`, `DicomWindowPreset`
+  - All tools accept dependency injection via abstract interfaces
+- **(feat)** `DicomTagId` — 28 predefined DICOM tag constants + generic lookup via `DicomMetadata.tag()`
+- **(feat)** `DicomPixelData` — sealed class hierarchy, `DicomInt16PixelData` for 16-bit monochrome
+- **(feat)** `DicomViewer` widget — `interactive` flag to disable built-in gestures for measurement overlays
+- **(feat)** rotation — 0°/90°/180°/270° via `rotateClockwise()`/`rotateCounterClockwise()`, included in PNG export
+- **(feat)** pixel-spacing-aware `DicomRuler` — measures mm distance with fallback to Imager Pixel Spacing (0018,1164) for X-ray
+- **(feat)** modality-agnostic `DicomWindowPreset.forImage()` — presets adapt to pixel value range, not hardcoded HU
+- **(feat)** `DicomExport.toPngBytes()` — web-safe PNG export (no `dart:io`)
+- **(feat)** `DicomParser.parseMetadata()` — metadata-only parse with `skipPixels: true`, no GPU needed
+- **(feat)** web support — WASM build instructions, cross-origin isolation headers, `serve_debug.py`
+- **(feat)** example app with measurement tools (ruler + ROI), rotation, presets, color maps, PNG export
+- **(fix)** shader uniform index 8 bound for `u_monochrome1` flag
+- **(fix)** `RangeError.range` used in `DicomParseResult.frame()` instead of `.index` (compatibility)
+- **(refactor)** 28-field Rust `DicomMetadata` struct (added `pixel_spacing`)
+- **(refactor)** `public_member_api_docs` enforced — all public API documented
+- **(refactor)** `MedicalScreen` removed — use `DicomViewer` directly
+- **(chore)** `analysis_options.yaml` strict lint rules; `cargokit` excluded from analysis
+- **(docs)** rewritten `README.md` and `AGENTS.md` reflecting new architecture
+- **(docs)** 175 unit + widget + integration tests, all passing
 
 ## 0.1.0+3
 

@@ -1,92 +1,146 @@
-import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
+
 import 'package:dicom_toolkit/dicom_toolkit.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
 
-class MockDicomController extends Mock implements DicomController {}
-
-void main() {
-  late MockDicomController mockController;
-
-  setUp(() {
-    mockController = MockDicomController();
-    // Default mock behavior
-    when(() => mockController.isLoading).thenReturn(false);
-    when(() => mockController.hasError).thenReturn(false);
-    when(() => mockController.hasData).thenReturn(false);
-    when(() => mockController.errorMessage).thenReturn(null);
-    when(() => mockController.addListener(any())).thenReturn(null);
-    when(() => mockController.removeListener(any())).thenReturn(null);
-    when(() => mockController.dispose()).thenReturn(null);
+/// Manual mock for DicomViewerController — avoids mocktail issues with
+/// ChangeNotifier concrete classes in widget tests.
+class FakeController extends ChangeNotifier implements DicomViewerController {
+  FakeController({
+    this.isLoading = false,
+    this.hasError = false,
+    this.hasData = false,
+    this.errorMessage,
+    this.result,
+    this.rawTexture,
+    this.colorLutTexture,
+    this.windowCenter,
+    this.windowWidth,
+    this.colorMap = DicomColorMap.grayscale,
+    this.invert = false,
+    this.isMonochrome1 = false,
+    this.shader,
+    this.hasShader = false,
+    this.rotationSteps = 0,
   });
 
-  Widget createWidgetUnderTest() {
-    return MaterialApp(
-      home: Scaffold(
-        body: DicomViewer(controller: mockController),
-      ),
-    );
-  }
+  @override
+  bool isLoading;
+  @override
+  bool hasError;
+  @override
+  bool hasData;
+  @override
+  String? errorMessage;
+  @override
+  DicomParseResult? result;
+  @override
+  ui.Image? rawTexture;
+  @override
+  ui.Image? colorLutTexture;
+  @override
+  double? windowCenter;
+  @override
+  double? windowWidth;
+  @override
+  DicomColorMap colorMap;
+  @override
+  bool invert;
+  @override
+  bool isMonochrome1;
+  @override
+  ui.FragmentShader? shader;
+  @override
+  bool hasShader;
+  @override
+  int rotationSteps;
 
+  @override
+  Future<void> loadFromBytes({required final dynamic bytes}) async {}
+
+  @override
+  void adjustWindowing(
+      {required final double deltaX, required final double deltaY}) {}
+
+  @override
+  void updateWindowing({final double? center, final double? width}) {}
+
+  @override
+  void resetWindowing() {}
+
+  @override
+  void applyPreset(
+      {required final double center, required final double width}) {}
+
+  @override
+  Future<void> setColorMap(final DicomColorMap map) async {}
+
+  @override
+  void toggleInvert() {}
+
+  @override
+  void clear() {}
+
+  @override
+  void rotateClockwise() {}
+
+  @override
+  void rotateCounterClockwise() {}
+
+  @override
+  Future<void> ensureShader() async {}
+}
+
+Widget _buildApp(final FakeController controller) {
+  return MaterialApp(
+    home: Scaffold(
+      body: DicomViewer(controller: controller),
+    ),
+  );
+}
+
+void main() {
   group('DicomViewer Widget', () {
     testWidgets('displays CircularProgressIndicator when loading',
         (final tester) async {
-      when(() => mockController.isLoading).thenReturn(true);
-
-      await tester.pumpWidget(createWidgetUnderTest());
+      final controller = FakeController(isLoading: true);
+      await tester.pumpWidget(_buildApp(controller));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
     testWidgets('displays error message when hasError', (final tester) async {
-      const errorMsg = 'Failed to load';
-      when(() => mockController.hasError).thenReturn(true);
-      when(() => mockController.errorMessage).thenReturn(errorMsg);
+      final controller = FakeController(
+        hasError: true,
+        errorMessage: 'Test error message',
+      );
+      await tester.pumpWidget(_buildApp(controller));
 
-      await tester.pumpWidget(createWidgetUnderTest());
+      expect(find.text('Test error message'), findsOneWidget);
+    });
 
-      expect(find.text(errorMsg), findsOneWidget);
+    testWidgets('displays Unknown error when hasError with null message',
+        (final tester) async {
+      final controller = FakeController(hasError: true);
+      await tester.pumpWidget(_buildApp(controller));
+
+      expect(find.text('Unknown error'), findsOneWidget);
     });
 
     testWidgets('displays default text when no data', (final tester) async {
-      await tester.pumpWidget(createWidgetUnderTest());
+      final controller = FakeController();
+      await tester.pumpWidget(_buildApp(controller));
 
       expect(find.text('No DICOM data loaded.'), findsOneWidget);
     });
 
-    testWidgets('displays CustomPaint when hasData', (final tester) async {
-      when(() => mockController.hasData).thenReturn(true);
-      // We also need to mock currentFrame, windowCenter, windowWidth, shader, rawTexture
-      // to avoid null errors in DicomShaderPainter.
-      // But we can just check if CustomPaint is present.
+    testWidgets('does not show error when hasError is false',
+        (final tester) async {
+      final controller = FakeController();
+      await tester.pumpWidget(_buildApp(controller));
 
-      // (Advanced: would need more detailed mocking for full integration)
-    });
-
-    testWidgets('triggers windowing adjustment on pan', (final tester) async {
-      when(() => mockController.hasData).thenReturn(true);
-      // Mock necessary properties for build
-      // ...
-
-      // await tester.drag(find.byType(DicomViewer), const Offset(10, 20));
-      // verify(() => mockController.adjustWindowing(deltaX: 10, deltaY: 20)).called(1);
-    });
-
-    testWidgets('triggers reset on double tap', (final tester) async {
-      when(() => mockController.hasData).thenReturn(true);
-      // ...
-
-      // await tester.doubleTap(find.byType(DicomViewer));
-      // verify(() => mockController.resetWindowing()).called(1);
-    });
-    group('Edge Cases', () {
-      testWidgets('Handles null error message gracefully',
-          (final tester) async {
-        when(() => mockController.hasError).thenReturn(true);
-        when(() => mockController.errorMessage).thenReturn(null);
-        await tester.pumpWidget(createWidgetUnderTest());
-        expect(find.text('Unknown error'), findsOneWidget);
-      });
+      expect(find.text('Unknown error'), findsNothing);
     });
   });
 }

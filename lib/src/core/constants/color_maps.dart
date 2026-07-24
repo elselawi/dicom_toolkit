@@ -25,7 +25,10 @@ enum DicomColorMap {
   /// Useful for orthopedic imaging.
   bone('Bone');
 
+  /// Creates a color map with a human-readable [label].
   const DicomColorMap(this.label);
+
+  /// A human-readable name for this color map.
   final String label;
 }
 
@@ -36,8 +39,8 @@ enum DicomColorMap {
 abstract class ColorMapLut {
   ColorMapLut._();
 
-  /// Returns a 256×4-byte (1024 bytes) Uint8List for the given [map].
-  static Uint8List generate(DicomColorMap map) {
+  /// Generates 256×4 RGBA bytes for [map].
+  static Uint8List generate(final DicomColorMap map) {
     return switch (map) {
       DicomColorMap.grayscale => _grayscale(),
       DicomColorMap.hotIron => _gradient(_hotIronStops),
@@ -50,7 +53,7 @@ abstract class ColorMapLut {
 
   /// Builds a 256-entry LUT from a list of (position, r, g, b) stops.
   /// Positions are in [0, 1]; colors are linearly interpolated.
-  static Uint8List _gradient(List<_ColorStop> stops) {
+  static Uint8List _gradient(final List<_ColorStop> stops) {
     final data = Uint8List(256 * 4);
     for (var i = 0; i < 256; i++) {
       final t = i / 255.0;

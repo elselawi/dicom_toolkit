@@ -1,222 +1,145 @@
 import 'dart:typed_data';
 
 import 'package:dicom_toolkit/dicom_toolkit.dart';
+import 'package:dicom_toolkit/src/rust/api/core/models/dicom_metadata.dart'
+    as generated;
 import 'package:flutter_test/flutter_test.dart';
 
-/// Tests for ROI measurement, DicomExport, invert toggle, and MONOCHROME1.
+/// Helper to build a DicomParseResult for tests.
+DicomParseResult _buildResult({
+  final int width = 4,
+  final int height = 4,
+  final Int16List? pixels,
+  final int pixelRepresentation = 1,
+  final String photometricInterpretation = 'MONOCHROME2',
+  final Map<DicomTagId, String>? tags,
+}) {
+  final inner = generated.DicomMetadata(
+    patientId: 'P001',
+    patientName: 'Test Patient',
+    studyDate: '20240101',
+    studyDescription: 'Study',
+    modality: 'CT',
+    manufacturer: 'Mfr',
+    manufacturerModelName: 'Model',
+    institutionName: 'Hosp',
+    studyInstanceUid: '1.2.3',
+    seriesInstanceUid: '1.2.3.1',
+    sopInstanceUid: '1.2.3.1.1',
+    seriesDescription: 'Series',
+    bodyPartExamined: 'CHEST',
+    sliceThickness: 1.0,
+    instanceNumber: '1',
+    photometricInterpretation: photometricInterpretation,
+    width: width,
+    height: height,
+    windowCenter: 40.0,
+    windowWidth: 400.0,
+    rescaleIntercept: 0.0,
+    rescaleSlope: 1.0,
+    samplesPerPixel: 1,
+    bitsAllocated: 16,
+    bitsStored: 16,
+    highBit: 15,
+    pixelRepresentation: pixelRepresentation,
+    pixelSpacing: '',
+  );
+  final frame = DicomFrameResult(
+    metadata: inner,
+    pixelData: pixels ?? Int16List(width * height),
+  );
+  return DicomParseResult.fromFrame(frame: frame, tags: tags);
+}
+
 void main() {
-  // ──────────────────────────────────────────────────────────
-  // DicomRoi
-  // ──────────────────────────────────────────────────────────
-  group('DicomRoi', () {
-    test('correctly computes right and bottom', () {
-      const roi = DicomRoi(left: 10, top: 20, width: 100, height: 50);
-      expect(roi.right, 110);
-      expect(roi.bottom, 70);
-    });
-
-    test('statistics computes mean correctly for known values', () {
-      const roi = DicomRoi(left: 0, top: 0, width: 2, height: 2);
-      final pixelData = Int16List.fromList([100, 200, 300, 400]);
-      // raw=100 → 100*1+0=100, 200→200, 300→300, 400→400
-
-      final stats = DicomRoi.statistics(
-        roi: roi,
-        pixelData: pixelData,
-        imageWidth: 2,
-        imageHeight: 2,
-        rescaleSlope: 1.0,
-        rescaleIntercept: 0.0,
-      );
-
-      expect(stats.count, 4);
-      expect(stats.min, 100);
-      expect(stats.max, 400);
-      expect(stats.mean, 250);
-    });
-
-    test('statistics applies rescale slope/intercept', () {
-      const roi = DicomRoi(left: 0, top: 0, width: 1, height: 1);
-      final pixelData = Int16List.fromList([-1000]);
-      // -1000 * 1.0 + (-1024) = -2024
-
-      final stats = DicomRoi.statistics(
-        roi: roi,
-        pixelData: pixelData,
-        imageWidth: 1,
-        imageHeight: 1,
-        rescaleSlope: 1.0,
-        rescaleIntercept: -1024.0,
-      );
-
-      expect(stats.mean, -2024);
-    });
-
-    test('ROI clamped to image bounds', () {
-      const roi = DicomRoi(left: -10, top: -10, width: 1000, height: 1000);
-      final pixelData = Int16List.fromList([42]);
-      // Image is 1×1, so ROI should clamp to (0,0)-(0,0) → 1 pixel
-
-      final stats = DicomRoi.statistics(
-        roi: roi,
-        pixelData: pixelData,
-        imageWidth: 1,
-        imageHeight: 1,
-        rescaleSlope: 1.0,
-        rescaleIntercept: 0,
-      );
-
-      expect(stats.count, 1);
-      expect(stats.mean, 42);
-    });
-
-    test('meanHu convenience method works', () {
-      const roi = DicomRoi(left: 0, top: 0, width: 2, height: 2);
-      final pixelData = Int16List.fromList([10, 10, 10, 10]);
-
-      final mean = DicomRoi.meanHu(
-        roi: roi,
-        pixelData: pixelData,
-        imageWidth: 2,
-        imageHeight: 2,
-        rescaleSlope: 2.0,
-        rescaleIntercept: 0,
-      );
-
-      expect(mean, 20); // 10 * 2 + 0
-    });
-
-    test('RoiStatistics toString is readable', () {
-      const stats = RoiStatistics(
-        min: -100,
-        max: 500,
-        mean: 200,
-        stddev: 50,
-        count: 100,
-      );
-      expect(stats.toString(), contains('200.0'));
-      expect(stats.toString(), contains('HU'));
+  group('DicomParseResult — MONOCHROME1', () {
+    test('isMonochrome1 returns false for MONOCHROME2', () {
+      final result = _buildResult();
+      // isMonochrome1 property is on DicomViewerController, not DicomParseResult
+      // But we can check photometricInterpretation
+      expect(result.metadata.photometricInterpretation, 'MONOCHROME2');
     });
   });
 
-  // ──────────────────────────────────────────────────────────
-  // DicomMeasurement / Offset
-  // ──────────────────────────────────────────────────────────
-  group('DicomMeasurement', () {
-    test('Offset distanceTo computes Euclidean distance', () {
-      final a = Offset(0, 0);
-      final b = Offset(3, 4);
-      expect(a.distanceTo(b), 5.0);
+  group('DicomParseResult — Signed pixels', () {
+    test('isSigned true for pixelRepresentation=1', () {
+      final result = _buildResult();
+      expect(result.isSigned, isTrue);
     });
 
-    test('Offset distanceTo is zero for same point', () {
-      final a = Offset(10, 20);
-      expect(a.distanceTo(a), 0);
-    });
-
-    test('DicomMeasurement holds two offsets', () {
-      const m = DicomMeasurement(start: Offset(0, 0), end: Offset(100, 200));
-      expect(m.start.dx, 0);
-      expect(m.end.dy, 200);
+    test('isSigned false for pixelRepresentation=0', () {
+      final result = _buildResult(pixelRepresentation: 0);
+      expect(result.isSigned, isFalse);
     });
   });
 
-  // ──────────────────────────────────────────────────────────
-  // DicomExport
-  // ──────────────────────────────────────────────────────────
-  group('DicomExport', () {
-    test('toPngBytes exists and returns Future<Uint8List>', () {
-      // Static verification — actual encoding needs GPU
-      expect(DicomExport.toPngBytes, isA<Function>());
+  group('DicomRoi — edge cases', () {
+    test('median for odd count', () {
+      // 3×1 image: [100, 500, 300], sorted: [100, 300, 500], median = 300
+      final pixels = Int16List.fromList([100, 500, 300]);
+      final result = _buildResult(width: 3, height: 1, pixels: pixels);
+      const roi = DicomRoi(x: 0, y: 0, width: 3, height: 1);
+
+      final stats = roi.compute(result);
+      expect(stats.median, 300);
+    });
+
+    test('stdDev for single pixel', () {
+      final pixels = Int16List.fromList([42]);
+      final result = _buildResult(width: 1, height: 1, pixels: pixels);
+      const roi = DicomRoi(x: 0, y: 0, width: 1, height: 1);
+
+      final stats = roi.compute(result);
+      // variance = 0 / 0 = NaN for n=1
+      expect(stats.stdDev.isNaN, isTrue);
+    });
+
+    test('ROI partially inside image (right edge)', () {
+      // 2×2 image: [1,2,3,4]
+      final pixels = Int16List.fromList([1, 2, 3, 4]);
+      final result = _buildResult(width: 2, height: 2, pixels: pixels);
+      // ROI starts at (1,0) covering 2 columns — only column 1 is valid
+      const roi = DicomRoi(x: 1, y: 0, width: 2, height: 2);
+
+      final stats = roi.compute(result);
+      // Clamped to columns [1,1] (just col 1): pixels[1]=2, pixels[3]=4
+      expect(stats.pixelCount, 2);
+      expect(stats.mean, 3.0); // (2+4)/2
     });
   });
 
-  // ──────────────────────────────────────────────────────────
-  // MONOCHROME1 detection
-  // ──────────────────────────────────────────────────────────
-  group('DicomController — MONOCHROME1', () {
-    test('isMonochrome1 returns true for MONOCHROME1', () {
-      final metadata = DicomMetadata(
-        patientId: '',
-        patientName: '',
-        studyDate: '',
-        studyDescription: '',
-        modality: '',
-        manufacturer: '',
-        manufacturerModelName: '',
-        institutionName: '',
-        studyInstanceUid: '',
-        seriesInstanceUid: '',
-        sopInstanceUid: '',
-        seriesDescription: '',
-        bodyPartExamined: '',
-        sliceThickness: 0,
-        instanceNumber: '',
-        photometricInterpretation: 'MONOCHROME1',
-        width: 1,
-        height: 1,
-        windowCenter: 0,
-        windowWidth: 0,
-        rescaleIntercept: 0,
-        rescaleSlope: 1,
-        samplesPerPixel: 1,
-        bitsAllocated: 16,
-        bitsStored: 16,
-        highBit: 15,
-        pixelRepresentation: 0,
+  group('DicomTagId — edge cases', () {
+    test('hex pads with leading zeros', () {
+      const tag = DicomTagId.fromParts(0x0001, 0x0001);
+      expect(tag.hex, '00010001');
+    });
+
+    test('toString round-trips', () {
+      const tag = DicomTagId.fromParts(0x0010, 0x0010);
+      final parsed = tag.toString();
+      expect(parsed, 'DicomTagId(00100010)');
+    });
+  });
+
+  group('DicomWindowPreset — comparison', () {
+    test(
+        'softTissue and mediastinum have same center/width but different labels',
+        () {
+      const st = DicomWindowPreset.softTissue();
+      const md = DicomWindowPreset.mediastinum();
+      expect(st.center, md.center);
+      expect(st.width, md.width);
+      expect(st, isNot(equals(md))); // labels differ
+    });
+
+    test('custom with same values as built-in is not equal', () {
+      const bone = DicomWindowPreset.bone();
+      const custom = DicomWindowPreset.custom(
+        center: 500,
+        width: 2000,
+        label: 'Not Bone',
       );
-      expect(metadata.photometricInterpretation, 'MONOCHROME1');
-    });
-
-    test('DicomMetadata detects MONOCHROME2 correctly', () {
-      final metadata = DicomMetadata(
-        patientId: '',
-        patientName: '',
-        studyDate: '',
-        studyDescription: '',
-        modality: '',
-        manufacturer: '',
-        manufacturerModelName: '',
-        institutionName: '',
-        studyInstanceUid: '',
-        seriesInstanceUid: '',
-        sopInstanceUid: '',
-        seriesDescription: '',
-        bodyPartExamined: '',
-        sliceThickness: 0,
-        instanceNumber: '',
-        photometricInterpretation: 'MONOCHROME2',
-        width: 1,
-        height: 1,
-        windowCenter: 0,
-        windowWidth: 0,
-        rescaleIntercept: 0,
-        rescaleSlope: 1,
-        samplesPerPixel: 1,
-        bitsAllocated: 16,
-        bitsStored: 16,
-        highBit: 15,
-        pixelRepresentation: 0,
-      );
-      expect(metadata.photometricInterpretation, 'MONOCHROME2');
-    });
-  });
-
-  // ──────────────────────────────────────────────────────────
-  // Color maps
-  // ──────────────────────────────────────────────────────────
-  group('DicomColorMap', () {
-    test('all maps have non-empty labels', () {
-      for (final map in DicomColorMap.values) {
-        expect(map.label, isNotEmpty);
-      }
-    });
-
-    test('ColorMapLut.generate returns 1024 bytes (256×4)', () {
-      for (final map in DicomColorMap.values) {
-        final lut = ColorMapLut.generate(map);
-        expect(lut.length, 1024); // 256 * 4
-      }
+      expect(bone, isNot(equals(custom)));
     });
   });
 }

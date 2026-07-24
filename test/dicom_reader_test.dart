@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_print
 
 import 'package:dicom_toolkit/dicom_toolkit.dart';
-import 'package:dicom_toolkit/src/rust/frb_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Comprehensive tests for the `readDicomInfo()` lightweight metadata API.
@@ -11,7 +10,7 @@ void main() {
   // ─── Setup ────────────────────────────────────────────────
 
   setUpAll(() async {
-    await RustLib.init();
+    await DicomToolkit.init();
   });
 
   /// Returns all .dcm files found in the test directory.

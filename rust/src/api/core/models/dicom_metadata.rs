@@ -74,6 +74,10 @@ pub struct DicomMetadata {
 
     /// Specifies whether the pixel data is signed (1) or unsigned (0).
     pub pixel_representation: u16,
+
+    /// Physical pixel spacing in mm as "row\\column" (e.g. "0.5\\0.5"). Tag (0028,0030).
+    /// Falls back to Imager Pixel Spacing (0018,1164) if Pixel Spacing is absent.
+    pub pixel_spacing: String,
 }
 
 impl DicomMetadata {
@@ -108,6 +112,7 @@ impl DicomMetadata {
             bits_stored: data.bits_stored,
             high_bit: data.high_bit,
             pixel_representation: data.pixel_representation,
+            pixel_spacing: data.pixel_spacing,
         };
     }
 }
@@ -143,6 +148,7 @@ impl Default for DicomMetadata {
             bits_stored: 16,
             high_bit: 15,
             pixel_representation: 0,
+            pixel_spacing: String::new(),
         };
     }
 }

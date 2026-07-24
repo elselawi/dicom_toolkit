@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
-import '../../rust/api/core/models/dicom_frame_result.dart';
+
+import '../../core/dicom_parse_result.dart';
 
 /// A performance-critical [CustomPainter] that offloads medical rendering to the GPU.
 ///
@@ -16,7 +18,7 @@ import '../../rust/api/core/models/dicom_frame_result.dart';
 class DicomShaderPainter extends CustomPainter {
   /// Creates a [DicomShaderPainter].
   DicomShaderPainter({
-    required this.frameResult,
+    required this.result,
     required this.windowCenter,
     required this.windowWidth,
     required this.shader,
@@ -24,11 +26,10 @@ class DicomShaderPainter extends CustomPainter {
     this.colorLutTexture,
     this.colorize = false,
     this.invert = false,
-    this.monochrome1 = false,
   });
 
-  /// The processing result containing metadata and pixel data pointers.
-  final DicomFrameResult frameResult;
+  /// The parsed DICOM result.
+  final DicomParseResult result;
 
   /// The user-defined or default Window Center for contrast mapping.
   final double windowCenter;
@@ -51,12 +52,12 @@ class DicomShaderPainter extends CustomPainter {
   /// Whether to invert grayscale (true) or render normally (false).
   final bool invert;
 
-  /// Whether the image uses MONOCHROME1 photometric interpretation.
-  final bool monochrome1;
-
   /// Performs the actual drawing operation using the fragment shader.
   @override
   void paint(final Canvas canvas, final Size size) {
+    final meta = result.metadata;
+    final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
+
     // 1. Pass the canvas resolution to the shader
     shader.setFloat(0, size.width);
     shader.setFloat(1, size.height);
@@ -66,15 +67,15 @@ class DicomShaderPainter extends CustomPainter {
     shader.setFloat(3, windowWidth);
 
     // 3. Pass the hardware-specific metadata for Hounsfield Units calculation
-    shader.setFloat(4, frameResult.metadata.rescaleIntercept);
-    shader.setFloat(5, frameResult.metadata.rescaleSlope);
+    shader.setFloat(4, meta.rescaleIntercept);
+    shader.setFloat(5, meta.rescaleSlope);
 
     // 4. Pass the colorize toggle
     shader.setFloat(6, colorize ? 1.0 : 0.0);
 
     // 5. Pass invert + MONOCHROME1 flags
     shader.setFloat(7, invert ? 1.0 : 0.0);
-    shader.setFloat(8, monochrome1 ? 1.0 : 0.0);
+    shader.setFloat(8, isMonochrome1 ? 1.0 : 0.0);
 
     // 6. Pass the actual image texture
     shader.setImageSampler(0, rawTexture);
@@ -96,10 +97,9 @@ class DicomShaderPainter extends CustomPainter {
   bool shouldRepaint(covariant final DicomShaderPainter oldDelegate) {
     return oldDelegate.windowCenter != windowCenter ||
         oldDelegate.windowWidth != windowWidth ||
-        oldDelegate.frameResult != frameResult ||
+        oldDelegate.result != result ||
         oldDelegate.colorize != colorize ||
         oldDelegate.invert != invert ||
-        oldDelegate.monochrome1 != monochrome1 ||
         oldDelegate.colorLutTexture != colorLutTexture;
   }
 }

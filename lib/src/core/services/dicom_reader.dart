@@ -1,13 +1,13 @@
 import '../../rust/api/core/config/dicom_config.dart';
 import '../../rust/api/core/models/dicom_frame_result.dart';
-import '../../rust/api/core/models/dicom_metadata.dart';
 import '../../rust/api/init.dart';
+import '../dicom_metadata.dart';
 import '../exceptions/dicom_exceptions.dart';
 
 /// Lightweight DICOM metadata + file identity, returned by [readDicomInfo].
 ///
-/// Use this when you only need header information without loading pixel data,
-/// creating a [DicomController], or compiling GPU shaders.
+/// Use this when you only need header information without loading pixel data
+/// or compiling GPU shaders.
 class DicomFileInfo {
   /// Creates a [DicomFileInfo].
   const DicomFileInfo({
@@ -22,7 +22,7 @@ class DicomFileInfo {
   /// The file name (including extension), extracted from [filePath].
   final String fileName;
 
-  /// All 27 extracted DICOM metadata fields (patient, equipment, acquisition, image, windowing).
+  /// All 27 extracted DICOM metadata fields.
   final DicomMetadata metadata;
 
   @override
@@ -32,27 +32,17 @@ class DicomFileInfo {
 
 /// Reads DICOM metadata from a file without loading pixel data or GPU shaders.
 ///
-/// This is a lightweight, zero-setup API that:
-/// - Parses the file header through the Rust core (all 27 DICOM tags).
-/// - Skips pixel extraction entirely for speed ([DicomConfig.skipPixels] = true).
-/// - Requires no [DicomController], no shader initialization, and no GPU context.
+/// This is a lightweight, zero-setup API that parses the file header through
+/// the Rust core and skips pixel extraction entirely.
 ///
-/// **Prerequisite**: [RustLib.init()] must have been called once before using this function.
-///
-/// ```dart
-/// await RustLib.init();
-/// final info = await readDicomInfo('/path/to/scan.dcm');
-/// print(info.fileName);          // "scan.dcm"
-/// print(info.metadata.modality); // "CT"
-/// print(info.metadata.patientName); // "John Doe"
-/// ```
+/// **Prerequisite**: [RustLib.init()] must have been called once before.
 ///
 /// Throws [DicomProcessingException] if the file cannot be opened or parsed.
 Future<DicomFileInfo> readDicomInfo(final String filePath) async {
   final fileName = filePath.split(RegExp(r'[/\\]')).last;
-  final config = DicomConfig(
+  const config = DicomConfig(
     autoNormalize: false,
-    skipPixels: true, // Metadata-only mode — skips pixel extraction entirely.
+    skipPixels: true,
   );
 
   final DicomFrameResult result;
@@ -68,6 +58,6 @@ Future<DicomFileInfo> readDicomInfo(final String filePath) async {
   return DicomFileInfo(
     filePath: filePath,
     fileName: fileName,
-    metadata: result.metadata,
+    metadata: DicomMetadata(inner: result.metadata),
   );
 }

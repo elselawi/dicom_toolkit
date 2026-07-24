@@ -104,6 +104,11 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         default_meta.pixel_representation,
     );
 
+    // --- Pixel Spacing (try standard tag first, then Imager Pixel Spacing) ---
+    let pixel_spacing = get_str_tag(&obj, tags::PIXEL_SPACING)
+        .or_else(|| get_str_tag(&obj, tags::IMAGER_PIXEL_SPACING))
+        .unwrap_or_default();
+
     let metadata = DicomMetadata::new(DicomMetadata {
         patient_id,
         patient_name,
@@ -132,6 +137,7 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         bits_stored,
         high_bit,
         pixel_representation,
+        pixel_spacing,
     });
 
     // --- Pixel Data Extraction ---

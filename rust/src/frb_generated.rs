@@ -467,6 +467,7 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_bitsStored = <u16>::sse_decode(deserializer);
         let mut var_highBit = <u16>::sse_decode(deserializer);
         let mut var_pixelRepresentation = <u16>::sse_decode(deserializer);
+        let mut var_pixelSpacing = <String>::sse_decode(deserializer);
         return crate::api::core::models::dicom_metadata::DicomMetadata {
             patient_id: var_patientId,
             patient_name: var_patientName,
@@ -495,6 +496,7 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
             bits_stored: var_bitsStored,
             high_bit: var_highBit,
             pixel_representation: var_pixelRepresentation,
+            pixel_spacing: var_pixelSpacing,
         };
     }
 }
@@ -713,6 +715,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata:
             self.bits_stored.into_into_dart().into_dart(),
             self.high_bit.into_into_dart().into_dart(),
             self.pixel_representation.into_into_dart().into_dart(),
+            self.pixel_spacing.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -799,6 +802,7 @@ impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
         <u16>::sse_encode(self.bits_stored, serializer);
         <u16>::sse_encode(self.high_bit, serializer);
         <u16>::sse_encode(self.pixel_representation, serializer);
+        <String>::sse_encode(self.pixel_spacing, serializer);
     }
 }
 

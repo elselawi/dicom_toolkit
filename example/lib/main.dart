@@ -3,16 +3,17 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
+  await DicomToolkit.init();
   runApp(const DicomExampleApp());
 }
 
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // App entry
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 
 class DicomExampleApp extends StatelessWidget {
   const DicomExampleApp({super.key});
@@ -20,55 +21,81 @@ class DicomExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DICOM Viewer',
+      title: 'DICOM Toolkit',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorSchemeSeed: Colors.indigo,
       ),
-      home: const ViewerScreen(),
+      home: const ToolkitScreen(),
     );
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Windowing Presets
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// Measurement state
+// ════════════════════════════════════════════════════════════
 
-enum WindowPreset {
-  bone('Bone', 1500, 300),
-  lung('Lung', -500, 1500),
-  softTissue('Soft Tissue', 40, 400),
-  brain('Brain', 40, 80),
-  liver('Liver', 80, 160),
-  mediastinum('Mediastinum', 50, 350);
+enum MeasureMode { none, ruler, roi }
 
-  const WindowPreset(this.label, this.center, this.width);
-  final String label;
-  final double center;
-  final double width;
+class _MeasureState {
+  final MeasureMode mode;
+  final Offset? start;
+  final Offset? end;
+  final RoiStatistics? stats;
+  final double? rulerMm;
+
+  const _MeasureState({
+    this.mode = MeasureMode.none,
+    this.start,
+    this.end,
+    this.stats,
+    this.rulerMm,
+  });
+
+  _MeasureState copyWith({
+    MeasureMode? mode,
+    Offset? start,
+    Offset? end,
+    RoiStatistics? stats,
+    double? rulerMm,
+    bool clearStart = false,
+    bool clearEnd = false,
+    bool clearStats = false,
+    bool clearRuler = false,
+  }) =>
+      _MeasureState(
+        mode: mode ?? this.mode,
+        start: clearStart ? null : (start ?? this.start),
+        end: clearEnd ? null : (end ?? this.end),
+        stats: clearStats ? null : (stats ?? this.stats),
+        rulerMm: clearRuler ? null : (rulerMm ?? this.rulerMm),
+      );
 }
 
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // Main screen
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 
-class ViewerScreen extends StatefulWidget {
-  const ViewerScreen({super.key});
+class ToolkitScreen extends StatefulWidget {
+  const ToolkitScreen({super.key});
 
   @override
-  State<ViewerScreen> createState() => _ViewerScreenState();
+  State<ToolkitScreen> createState() => _ToolkitScreenState();
 }
 
-class _ViewerScreenState extends State<ViewerScreen> {
-  final _controller = DicomController();
+class _ToolkitScreenState extends State<ToolkitScreen> {
+  final _controller = DicomViewerController();
+  final _viewerKey = GlobalKey();
   String? _currentFileName;
+  _MeasureState _measure = const _MeasureState();
+  final _ruler = const DicomRuler();
 
   @override
   void initState() {
     super.initState();
-    _controller.initialize();
+    _loadSample();
   }
 
   @override
@@ -77,11 +104,18 @@ class _ViewerScreenState extends State<ViewerScreen> {
     super.dispose();
   }
 
-  // ── Actions ────────────────────────────────────────────────
+  // ── File ──────────────────────────────────────────────────
+
+  Future<void> _loadSample() async {
+    try {
+      final bytes = await rootBundle.load('dicom_samples/sample.dcm');
+      await _loadBytes(bytes.buffer.asUint8List(), name: 'sample.dcm');
+    } catch (_) {
+      // Sample not available — user can still pick a file.
+    }
+  }
 
   Future<void> _pickFile() async {
-    // `withData: true` ensures raw bytes are returned on every platform —
-    // loading is bytes-only (there is no local file system on the Web).
     final result =
         await FilePicker.pickFiles(type: FileType.any, withData: true);
     final file = result?.files.single;
@@ -90,8 +124,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
     await _loadBytes(bytes, name: file.name);
   }
 
-  Future<void> _loadBytes(Uint8List bytes, {required final String name}) async {
+  Future<void> _loadBytes(Uint8List bytes, {required String name}) async {
     _currentFileName = name;
+    _measure = const _MeasureState();
     try {
       await _controller.loadFromBytes(bytes: bytes);
     } catch (e) {
@@ -105,15 +140,21 @@ class _ViewerScreenState extends State<ViewerScreen> {
     }
   }
 
-  void _applyPreset(WindowPreset preset) {
-    _controller.updateWindowing(center: preset.center, width: preset.width);
-  }
+  // ── Export ─────────────────────────────────────────────────
 
   Future<void> _exportPng(BuildContext context) async {
-    final texture = _controller.rawTexture;
-    if (texture == null || !mounted) return;
+    final res = _controller.result;
+    if (res == null || !mounted) return;
 
-    final bytes = await DicomExport.toPngBytes(texture);
+    final exporter = const DicomExport();
+    final bytes = await exporter.toPngBytes(
+      res,
+      windowCenter: _controller.windowCenter,
+      windowWidth: _controller.windowWidth,
+      colorMap: _controller.colorMap,
+      invert: _controller.invert,
+      rotationSteps: _controller.rotationSteps,
+    );
     final name = _currentFileName?.split(RegExp(r'[/\\]')).last ?? 'dicom';
 
     await FilePicker.saveFile(
@@ -123,6 +164,133 @@ class _ViewerScreenState extends State<ViewerScreen> {
       type: FileType.custom,
       allowedExtensions: ['png'],
     );
+  }
+
+  // ── Measurement helpers ────────────────────────────────────
+
+  /// Map a point in the viewer widget's local coordinates to DICOM pixel
+  /// coordinates, accounting for FittedBox(BoxFit.contain) layout.
+  Offset _toImagePixel(Offset widgetLocal, Size widgetSize, Size imageSize) {
+    if (imageSize.isEmpty || widgetSize.isEmpty) return Offset.zero;
+
+    final imgAspect = imageSize.width / imageSize.height;
+    final widgetAspect = widgetSize.width / widgetSize.height;
+
+    double displayW, displayH, offsetX, offsetY;
+    if (imgAspect > widgetAspect) {
+      // Image is wider than widget — constrained by width, letterboxed top/bottom
+      displayW = widgetSize.width;
+      displayH = widgetSize.width / imgAspect;
+      offsetX = 0;
+      offsetY = (widgetSize.height - displayH) / 2;
+    } else {
+      // Image is taller or equal — constrained by height, letterboxed left/right
+      displayH = widgetSize.height;
+      displayW = widgetSize.height * imgAspect;
+      offsetX = (widgetSize.width - displayW) / 2;
+      offsetY = 0;
+    }
+
+    return Offset(
+      ((widgetLocal.dx - offsetX) / displayW * imageSize.width)
+          .clamp(0, imageSize.width - 1),
+      ((widgetLocal.dy - offsetY) / displayH * imageSize.height)
+          .clamp(0, imageSize.height - 1),
+    );
+  }
+
+  void _onViewerTapDown(TapDownDetails details, Size imageSize) {
+    if (_measure.mode == MeasureMode.none) return;
+
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(details.globalPosition);
+    final viewerSize = box.size;
+
+    if (_measure.mode == MeasureMode.ruler) {
+      if (_measure.start == null) {
+        setState(() {
+          _measure = _measure.copyWith(
+            start: _toImagePixel(local, viewerSize, imageSize),
+            clearEnd: true,
+            clearRuler: true,
+          );
+        });
+      } else {
+        final end = _toImagePixel(local, viewerSize, imageSize);
+        final result = _controller.result;
+        if (result != null) {
+          final mm = _ruler.measure(
+            result.metadata,
+            (x: _measure.start!.dx, y: _measure.start!.dy),
+            (x: end.dx, y: end.dy),
+          );
+          setState(() {
+            _measure = _measure.copyWith(end: end, rulerMm: mm);
+          });
+        }
+      }
+    }
+  }
+
+  void _onViewerPanStart(DragStartDetails details, Size imageSize) {
+    if (_measure.mode != MeasureMode.roi) return;
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(details.globalPosition);
+    final viewerSize = box.size;
+    setState(() {
+      _measure = _measure.copyWith(
+        start: _toImagePixel(local, viewerSize, imageSize),
+        clearEnd: true,
+        clearStats: true,
+      );
+    });
+  }
+
+  void _onViewerPanUpdate(DragUpdateDetails details, Size imageSize) {
+    if (_measure.mode != MeasureMode.roi || _measure.start == null) return;
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(details.globalPosition);
+    final viewerSize = box.size;
+    setState(() {
+      _measure = _measure.copyWith(
+        end: _toImagePixel(local, viewerSize, imageSize),
+      );
+    });
+  }
+
+  void _onViewerPanEnd(DragEndDetails details, Size imageSize) {
+    if (_measure.mode != MeasureMode.roi ||
+        _measure.start == null ||
+        _measure.end == null) {
+      return;
+    }
+    final result = _controller.result;
+    if (result == null) {
+      return;
+    }
+
+    final s = _measure.start!;
+    final e = _measure.end!;
+    final roi = DicomRoi(
+      x: s.dx < e.dx ? s.dx.toInt() : e.dx.toInt(),
+      y: s.dy < e.dy ? s.dy.toInt() : e.dy.toInt(),
+      width: (s.dx - e.dx).abs().toInt(),
+      height: (s.dy - e.dy).abs().toInt(),
+    );
+
+    if (roi.width > 0 && roi.height > 0) {
+      final stats = roi.compute(result);
+      setState(() {
+        _measure = _measure.copyWith(stats: stats);
+      });
+    }
+  }
+
+  void _clearMeasurement() {
+    setState(() => _measure = const _MeasureState());
   }
 
   // ── Build ──────────────────────────────────────────────────
@@ -145,8 +313,6 @@ class _ViewerScreenState extends State<ViewerScreen> {
     );
   }
 
-  // ── Empty state ────────────────────────────────────────────
-
   Widget _buildEmptyState() {
     final error = _controller.hasError ? _controller.errorMessage : null;
 
@@ -154,23 +320,17 @@ class _ViewerScreenState extends State<ViewerScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.biotech,
-            size: 72,
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-          ),
+          Icon(Icons.biotech,
+              size: 72,
+              color:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
-          Text(
-            'DICOM Viewer',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('DICOM Toolkit',
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
-          Text(
-            'Open a .dcm file to begin',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
+          Text('Open a .dcm file to begin',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
           if (error != null) ...[
             const SizedBox(height: 16),
             Container(
@@ -180,89 +340,111 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                error,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onErrorContainer,
-                  fontSize: 13,
-                ),
-              ),
+              child: Text(error,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                      fontSize: 13)),
             ),
           ],
           const SizedBox(height: 32),
-          FilledButton.icon(
-            onPressed: _pickFile,
-            icon: const Icon(Icons.folder_open),
-            label: const Text('Open DICOM File'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: _loadSample,
+                icon: const Icon(Icons.science),
+                label: const Text('Load Sample'),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: _pickFile,
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Open DICOM File'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ── Viewer layout ──────────────────────────────────────────
-
   Widget _buildViewer() {
     final fileName =
         _currentFileName?.split(RegExp(r'[/\\]')).last ?? 'Unknown';
+    final meta = _controller.result!.metadata;
+    final imageSize = Size(meta.width.toDouble(), meta.height.toDouble());
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth > 600;
+      final viewerPane = _buildViewerPane(imageSize);
 
-        if (isWide) {
-          return Row(
-            children: [
-              // Viewer — left side
-              Expanded(
-                flex: 3,
-                child: _buildViewerPane(),
-              ),
-              // Controls panel — right side
-              SizedBox(
-                width: 320,
-                child: _BottomPanel(
-                  controller: _controller,
-                  fileName: fileName,
-                  onPreset: _applyPreset,
-                  onExport: (ctx) => _exportPng(ctx),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          children: [
-            // Viewer — top
-            Expanded(
-              flex: 5,
-              child: _buildViewerPane(),
+      if (isWide) {
+        return Row(children: [
+          Expanded(flex: 3, child: viewerPane),
+          SizedBox(
+            width: 340,
+            child: _ToolPanel(
+              controller: _controller,
+              fileName: fileName,
+              measure: _measure,
+              onPickFile: _pickFile,
+              onExport: _exportPng,
+              onMeasureMode: (m) => setState(() {
+                _measure = _measure.copyWith(
+                    mode: m,
+                    clearStart: true,
+                    clearEnd: true,
+                    clearStats: true,
+                    clearRuler: true);
+              }),
+              onClearMeasure: _clearMeasurement,
             ),
-            // Controls — bottom
-            Expanded(
-              flex: 4,
-              child: _BottomPanel(
-                controller: _controller,
-                fileName: fileName,
-                onPreset: _applyPreset,
-                onExport: (ctx) => _exportPng(ctx),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+          ),
+        ]);
+      }
+
+      return Column(children: [
+        Expanded(flex: 5, child: viewerPane),
+        Expanded(
+          flex: 4,
+          child: _ToolPanel(
+            controller: _controller,
+            fileName: fileName,
+            measure: _measure,
+            onPickFile: _pickFile,
+            onExport: _exportPng,
+            onMeasureMode: (m) => setState(() {
+              _measure = _measure.copyWith(
+                  mode: m,
+                  clearStart: true,
+                  clearEnd: true,
+                  clearStats: true,
+                  clearRuler: true);
+            }),
+            onClearMeasure: _clearMeasurement,
+          ),
+        ),
+      ]);
+    });
   }
 
-  Widget _buildViewerPane() {
-    final meta = _controller.metadata!;
+  Widget _buildViewerPane(Size imageSize) {
+    final meta = _controller.result!.metadata;
+    final measuring = _measure.mode != MeasureMode.none;
 
-    return Stack(
+    Widget viewerStack = Stack(
+      key: _viewerKey,
       fit: StackFit.expand,
       children: [
-        DicomViewer(controller: _controller),
-        // Patient overlay
+        DicomViewer(
+          controller: _controller,
+          interactive: !measuring,
+        ),
+
+        // Measurement overlay
+        if (measuring) _MeasureOverlay(measure: _measure, imageSize: imageSize),
+
+        // Patient info overlay
         Positioned(
           bottom: 16,
           left: 16,
@@ -288,28 +470,23 @@ class _ViewerScreenState extends State<ViewerScreen> {
                       child: Text(
                         meta.modality == 'Unknown' ? 'DICOM' : meta.modality,
                         style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      meta.patientName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
+                    Text(meta.patientName,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15)),
                     Text(
                       '${meta.studyDate != 'Unknown' ? '${meta.studyDate}  ·  ' : ''}'
                       '${meta.width}×${meta.height}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 12,
-                      ),
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12),
                     ),
                   ],
                 ),
@@ -318,16 +495,14 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _OverlayIconButton(
-                    icon: Icons.folder_open,
-                    onTap: _pickFile,
-                    tooltip: 'Open file',
-                  ),
+                      icon: Icons.folder_open,
+                      onTap: _pickFile,
+                      tooltip: 'Open file'),
                   const SizedBox(height: 6),
                   _OverlayIconButton(
-                    icon: Icons.refresh,
-                    onTap: _controller.resetWindowing,
-                    tooltip: 'Reset windowing',
-                  ),
+                      icon: Icons.refresh,
+                      onTap: _controller.resetWindowing,
+                      tooltip: 'Reset windowing'),
                 ],
               ),
             ],
@@ -335,20 +510,184 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ),
       ],
     );
+
+    if (!measuring) return viewerStack;
+
+    // When measuring, wrap in a GestureDetector that captures taps/pans
+    // before they reach the (now non-interactive) DicomViewer.
+    return GestureDetector(
+      onTapDown: (d) => _onViewerTapDown(d, imageSize),
+      onPanStart: (d) => _onViewerPanStart(d, imageSize),
+      onPanUpdate: (d) => _onViewerPanUpdate(d, imageSize),
+      onPanEnd: (d) => _onViewerPanEnd(d, imageSize),
+      child: viewerStack,
+    );
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Overlay icon button (on the viewer)
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// Measurement overlay
+// ════════════════════════════════════════════════════════════
+
+class _MeasureOverlay extends StatelessWidget {
+  const _MeasureOverlay({required this.measure, required this.imageSize});
+  final _MeasureState measure;
+  final Size imageSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final widgetSize = Size(constraints.maxWidth, constraints.maxHeight);
+      final imgAspect = imageSize.width / imageSize.height;
+      final widgetAspect = widgetSize.width / widgetSize.height;
+
+      double displayW, displayH, offsetX, offsetY;
+      if (imgAspect > widgetAspect) {
+        displayW = widgetSize.width;
+        displayH = widgetSize.width / imgAspect;
+        offsetX = 0;
+        offsetY = (widgetSize.height - displayH) / 2;
+      } else {
+        displayH = widgetSize.height;
+        displayW = widgetSize.height * imgAspect;
+        offsetX = (widgetSize.width - displayW) / 2;
+        offsetY = 0;
+      }
+
+      return IgnorePointer(
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: _MeasurePainter(
+            measure: measure,
+            displayW: displayW,
+            displayH: displayH,
+            offsetX: offsetX,
+            offsetY: offsetY,
+            imageW: imageSize.width,
+            imageH: imageSize.height,
+            color: Theme.of(context).colorScheme.tertiary,
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _MeasurePainter extends CustomPainter {
+  _MeasurePainter({
+    required this.measure,
+    required this.displayW,
+    required this.displayH,
+    required this.offsetX,
+    required this.offsetY,
+    required this.imageW,
+    required this.imageH,
+    required this.color,
+  });
+  final _MeasureState measure;
+  final double displayW, displayH, offsetX, offsetY;
+  final double imageW, imageH;
+  final Color color;
+
+  /// Convert a DICOM pixel coordinate to a widget-local canvas coordinate.
+  Offset _toCanvas(Offset pixel) => Offset(
+        pixel.dx / imageW * displayW + offsetX,
+        pixel.dy / imageH * displayH + offsetY,
+      );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    final start = measure.start;
+    if (start == null) return;
+    final s = _toCanvas(start);
+
+    if (measure.mode == MeasureMode.ruler) {
+      _crosshair(canvas, s, paint);
+      if (measure.end != null) {
+        final e = _toCanvas(measure.end!);
+        _crosshair(canvas, e, paint);
+        canvas.drawLine(s, e, paint..strokeWidth = 1.5);
+        if (measure.rulerMm != null) {
+          _label(canvas, e, '${measure.rulerMm!.toStringAsFixed(1)} mm', color);
+        }
+      }
+    }
+
+    if (measure.mode == MeasureMode.roi && measure.end != null) {
+      final e = _toCanvas(measure.end!);
+      final rect = Rect.fromPoints(s, e);
+      canvas.drawRect(
+          rect,
+          paint
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5);
+      canvas.drawRect(
+          rect,
+          paint
+            ..color = color.withValues(alpha: 0.15)
+            ..style = PaintingStyle.fill);
+      if (measure.stats != null) {
+        final st = measure.stats!;
+        _label(
+            canvas,
+            Offset(rect.left + 4, rect.top + 14),
+            'μ=${st.mean.toStringAsFixed(0)}  σ=${st.stdDev.isNaN ? "—" : st.stdDev.toStringAsFixed(0)}',
+            color);
+        _label(
+            canvas,
+            Offset(rect.left + 4, rect.top + 30),
+            'min=${st.min.toStringAsFixed(0)}  max=${st.max.toStringAsFixed(0)}  n=${st.pixelCount}',
+            color);
+      }
+    }
+  }
+
+  void _crosshair(Canvas canvas, Offset c, Paint paint) {
+    const r = 6.0;
+    canvas.drawCircle(c, r, paint);
+    canvas.drawLine(Offset(c.dx - r - 3, c.dy), Offset(c.dx + r + 3, c.dy),
+        paint..strokeWidth = 1);
+    canvas.drawLine(
+        Offset(c.dx, c.dy - r - 3), Offset(c.dx, c.dy + r + 3), paint);
+  }
+
+  void _label(Canvas canvas, Offset pos, String text, Color bg) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.w600,
+            shadows: const [Shadow(blurRadius: 4, color: Colors.black)]),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(pos.dx - 3, pos.dy - tp.height - 2, tp.width + 6,
+                tp.height + 4),
+            const Radius.circular(3)),
+        Paint()..color = bg.withValues(alpha: 0.7));
+    tp.paint(canvas, Offset(pos.dx, pos.dy - tp.height - 1));
+  }
+
+  @override
+  bool shouldRepaint(covariant _MeasurePainter o) => measure != o.measure;
+}
+
+// ════════════════════════════════════════════════════════════
+// Overlay icon button
+// ════════════════════════════════════════════════════════════
 
 class _OverlayIconButton extends StatelessWidget {
-  const _OverlayIconButton({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
-
+  const _OverlayIconButton(
+      {required this.icon, required this.onTap, this.tooltip});
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
@@ -373,30 +712,35 @@ class _OverlayIconButton extends StatelessWidget {
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Bottom panel: tabbed Controls + Metadata
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// Side panel: Controls · Measure · Metadata
+// ════════════════════════════════════════════════════════════
 
-class _BottomPanel extends StatefulWidget {
-  const _BottomPanel({
+class _ToolPanel extends StatefulWidget {
+  const _ToolPanel({
     required this.controller,
     required this.fileName,
-    required this.onPreset,
+    required this.measure,
+    required this.onPickFile,
     required this.onExport,
+    required this.onMeasureMode,
+    required this.onClearMeasure,
   });
-
-  final DicomController controller;
+  final DicomViewerController controller;
   final String fileName;
-  final void Function(WindowPreset) onPreset;
+  final _MeasureState measure;
+  final VoidCallback onPickFile;
   final void Function(BuildContext) onExport;
+  final void Function(MeasureMode) onMeasureMode;
+  final VoidCallback onClearMeasure;
 
   @override
-  State<_BottomPanel> createState() => _BottomPanelState();
+  State<_ToolPanel> createState() => _ToolPanelState();
 }
 
-class _BottomPanelState extends State<_BottomPanel>
+class _ToolPanelState extends State<_ToolPanel>
     with SingleTickerProviderStateMixin {
-  late final _tabController = TabController(length: 2, vsync: this);
+  late final _tabController = TabController(length: 3, vsync: this);
 
   @override
   void dispose() {
@@ -406,56 +750,47 @@ class _BottomPanelState extends State<_BottomPanel>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.tune), text: 'Controls'),
-            Tab(icon: Icon(Icons.info_outline), text: 'Metadata'),
-          ],
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _ControlsTab(
-                controller: widget.controller,
-                onPreset: widget.onPreset,
-                onExport: widget.onExport,
-              ),
-              _MetadataTab(
-                controller: widget.controller,
-                fileName: widget.fileName,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return Column(children: [
+      TabBar(controller: _tabController, tabs: const [
+        Tab(icon: Icon(Icons.tune), text: 'Controls'),
+        Tab(icon: Icon(Icons.straighten), text: 'Measure'),
+        Tab(icon: Icon(Icons.info_outline), text: 'Metadata'),
+      ]),
+      Expanded(
+        child: TabBarView(controller: _tabController, children: [
+          _ControlsTab(
+              controller: widget.controller,
+              onPickFile: widget.onPickFile,
+              onExport: widget.onExport),
+          _MeasureTab(
+              measure: widget.measure,
+              onMode: widget.onMeasureMode,
+              onClear: widget.onClearMeasure),
+          _MetadataTab(
+              controller: widget.controller, fileName: widget.fileName),
+        ]),
+      ),
+    ]);
   }
 }
 
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // Controls tab
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 
 class _ControlsTab extends StatelessWidget {
   const _ControlsTab({
     required this.controller,
-    required this.onPreset,
+    required this.onPickFile,
     required this.onExport,
   });
-
-  final DicomController controller;
-  final void Function(WindowPreset) onPreset;
+  final DicomViewerController controller;
+  final VoidCallback onPickFile;
   final void Function(BuildContext) onExport;
 
   @override
   Widget build(BuildContext context) {
-    final meta = controller.metadata!;
-
-    // Dynamic slider ranges based on the actual DICOM windowing defaults
+    final meta = controller.result!.metadata;
     final defaultCenter = meta.windowCenter;
     final defaultWidth = meta.windowWidth;
     final centerRange = (defaultWidth * 3).clamp(100.0, 40000.0);
@@ -469,30 +804,55 @@ class _ControlsTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Preset chips
-              Text(
-                'Quick Presets',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              // File actions
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPickFile,
+                    icon: const Icon(Icons.folder_open, size: 16),
+                    label: const Text('Open', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => onExport(context),
+                    icon: const Icon(Icons.save_alt, size: 16),
+                    label: const Text('Export PNG',
+                        style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              // Presets from DicomWindowPreset toolkit
+              Text('Quick Presets',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 6),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: WindowPreset.values.map((preset) {
+                spacing: 6,
+                runSpacing: 6,
+                children: DicomWindowPreset.forImage(controller.result!)
+                    .map((preset) {
+                  final selected = controller.windowCenter == preset.center &&
+                      controller.windowWidth == preset.width;
                   return ChoiceChip(
-                    label: Text(preset.label),
-                    selected: controller.windowCenter == preset.center &&
-                        controller.windowWidth == preset.width,
-                    onSelected: (_) => onPreset(preset),
+                    label: Text(preset.label,
+                        style: const TextStyle(fontSize: 11)),
+                    selected: selected,
+                    onSelected: (_) => controller.applyPreset(
+                        center: preset.center, width: preset.width),
                     visualDensity: VisualDensity.compact,
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
 
-              // Level slider — range centered on the DICOM default
               _LabeledSlider(
                 label: 'Level',
                 value: controller.windowCenter ?? defaultCenter,
@@ -501,8 +861,6 @@ class _ControlsTab extends StatelessWidget {
                 onChanged: (v) => controller.updateWindowing(center: v),
               ),
               const SizedBox(height: 4),
-
-              // Width slider
               _LabeledSlider(
                 label: 'Width',
                 value: controller.windowWidth ?? defaultWidth,
@@ -512,43 +870,62 @@ class _ControlsTab extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Reset + rescale info
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: controller.resetWindowing,
-                    icon: const Icon(Icons.restore, size: 18),
-                    label: const Text('Reset'),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Default L/W: ${defaultCenter.toStringAsFixed(0)} / ${defaultWidth.toStringAsFixed(0)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                OutlinedButton.icon(
+                  onPressed: controller.resetWindowing,
+                  icon: const Icon(Icons.restore, size: 16),
+                  label: const Text('Reset', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact),
+                ),
+                const Spacer(),
+                Text(
+                  'L/W: ${defaultCenter.toStringAsFixed(0)}/${defaultWidth.toStringAsFixed(0)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ]),
+              const SizedBox(height: 12),
+
+              // Rotation
+              Row(children: [
+                OutlinedButton.icon(
+                  onPressed: controller.rotateCounterClockwise,
+                  icon: const Icon(Icons.rotate_left, size: 16),
+                  label: const Text('Rotate', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: controller.rotateClockwise,
+                  icon: const Icon(Icons.rotate_right, size: 16),
+                  label: const Text('Rotate', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${controller.rotationSteps * 90}°',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ]),
               const SizedBox(height: 16),
 
-              // Color map toggle
-              Text(
-                'Color Map',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              Text('Color Map',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
               Wrap(
-                spacing: 8,
+                spacing: 6,
                 runSpacing: 6,
                 children: DicomColorMap.values.map((map) {
                   final isSelected = controller.colorMap == map;
                   return ChoiceChip(
-                    label: Text(
-                      map.label,
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    label:
+                        Text(map.label, style: const TextStyle(fontSize: 11)),
                     selected: isSelected,
                     onSelected: (_) => controller.setColorMap(map),
                     visualDensity: VisualDensity.compact,
@@ -560,32 +937,18 @@ class _ControlsTab extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Invert + Export row
-              Row(
-                children: [
-                  ChoiceChip(
-                    label: const Text('Invert', style: TextStyle(fontSize: 12)),
-                    selected: controller.invert,
-                    onSelected: (_) => controller.toggleInvert(),
-                    visualDensity: VisualDensity.compact,
-                    avatar: Icon(
-                      controller.invert
-                          ? Icons.invert_colors
-                          : Icons.invert_colors_off,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => onExport(context),
-                    icon: const Icon(Icons.save_alt, size: 16),
-                    label: const Text('Export PNG',
-                        style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
+              ChoiceChip(
+                label: const Text('Invert Grayscale',
+                    style: TextStyle(fontSize: 11)),
+                selected: controller.invert,
+                onSelected: (_) => controller.toggleInvert(),
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  controller.invert
+                      ? Icons.invert_colors
+                      : Icons.invert_colors_off,
+                  size: 16,
+                ),
               ),
             ],
           ),
@@ -595,9 +958,180 @@ class _ControlsTab extends StatelessWidget {
   }
 }
 
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// Measure tab
+// ════════════════════════════════════════════════════════════
+
+class _MeasureTab extends StatelessWidget {
+  const _MeasureTab(
+      {required this.measure, required this.onMode, required this.onClear});
+  final _MeasureState measure;
+  final void Function(MeasureMode) onMode;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Select Tool',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('None', style: TextStyle(fontSize: 12)),
+              selected: measure.mode == MeasureMode.none,
+              onSelected: (_) => onMode(MeasureMode.none),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('📏 Ruler', style: TextStyle(fontSize: 12)),
+              selected: measure.mode == MeasureMode.ruler,
+              onSelected: (_) => onMode(MeasureMode.ruler),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('⬜ ROI', style: TextStyle(fontSize: 12)),
+              selected: measure.mode == MeasureMode.roi,
+              onSelected: (_) => onMode(MeasureMode.roi),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        if (measure.mode == MeasureMode.ruler) ...[
+          _InfoCard(
+            icon: Icons.touch_app,
+            text: measure.start == null
+                ? 'Tap two points on the image to measure distance.'
+                : 'Tap the second point to complete measurement.',
+          ),
+        ],
+        if (measure.mode == MeasureMode.roi)
+          _InfoCard(
+            icon: Icons.drag_indicator,
+            text:
+                'Drag to draw a rectangular ROI. Statistics appear on release.',
+          ),
+        if (measure.rulerMm != null) ...[
+          const SizedBox(height: 12),
+          _ResultCard(
+            title: 'Distance',
+            value: '${measure.rulerMm!.toStringAsFixed(1)} mm',
+          ),
+        ],
+        if (measure.stats != null) ...[
+          const SizedBox(height: 12),
+          _ResultCard(
+            title: 'ROI Statistics',
+            value: [
+              'Mean:  ${measure.stats!.mean.toStringAsFixed(0)}',
+              'StdDev: ${measure.stats!.stdDev.isNaN ? "—" : measure.stats!.stdDev.toStringAsFixed(0)}',
+              'Min:   ${measure.stats!.min.toStringAsFixed(0)}',
+              'Max:   ${measure.stats!.max.toStringAsFixed(0)}',
+              'Median:${measure.stats!.median.toStringAsFixed(0)}',
+              'Count: ${measure.stats!.pixelCount} px',
+            ].join('\n'),
+          ),
+        ],
+        if (measure.mode != MeasureMode.none &&
+            (measure.start != null || measure.rulerMm != null)) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.clear, size: 16),
+              label: const Text('Clear measurement',
+                  style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Icon(icon,
+            size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({required this.title, required this.value});
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .tertiaryContainer
+            .withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color:
+                Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+                color: Theme.of(context).colorScheme.tertiary)),
+        const SizedBox(height: 4),
+        Text(value,
+            style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 // Labeled slider
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 
 class _LabeledSlider extends StatelessWidget {
   const _LabeledSlider({
@@ -607,66 +1141,49 @@ class _LabeledSlider extends StatelessWidget {
     required this.max,
     required this.onChanged,
   });
-
   final String label;
-  final double value;
-  final double min;
-  final double max;
+  final double value, min, max;
   final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final clamped = value.clamp(min, max);
-    return Row(
-      children: [
-        SizedBox(
-          width: 48,
-          child: Text(
-            label,
+    return Row(children: [
+      SizedBox(
+        width: 48,
+        child: Text(label,
             style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Slider(
-            value: clamped,
-            min: min,
-            max: max,
-            onChanged: onChanged,
-          ),
-        ),
-        SizedBox(
-          width: 52,
-          child: Text(
-            value.toStringAsFixed(0),
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      ),
+      Expanded(
+          child:
+              Slider(value: clamped, min: min, max: max, onChanged: onChanged)),
+      SizedBox(
+        width: 52,
+        child: Text(value.toStringAsFixed(0),
             textAlign: TextAlign.end,
             style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ),
+    ]);
   }
 }
 
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 // Metadata tab
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 
 class _MetadataTab extends StatelessWidget {
   const _MetadataTab({required this.controller, required this.fileName});
-
-  final DicomController controller;
+  final DicomViewerController controller;
   final String fileName;
 
   @override
   Widget build(BuildContext context) {
-    final meta = controller.metadata;
+    final meta = controller.result?.metadata;
     if (meta == null) return const SizedBox.shrink();
 
     return SingleChildScrollView(
@@ -738,94 +1255,53 @@ class _MetadataTab extends StatelessWidget {
           _SectionHeader(title: 'UIDs'),
           const SizedBox(height: 6),
           _MetaTile(
-            label: 'SOP Instance',
-            value: meta.sopInstanceUid,
-            mono: true,
-          ),
+              label: 'SOP Instance', value: meta.sopInstanceUid, mono: true),
           const SizedBox(height: 6),
-          _MetaTile(
-            label: 'Series',
-            value: meta.seriesInstanceUid,
-            mono: true,
-          ),
+          _MetaTile(label: 'Series', value: meta.seriesInstanceUid, mono: true),
           const SizedBox(height: 6),
-          _MetaTile(
-            label: 'Study',
-            value: meta.studyInstanceUid,
-            mono: true,
-          ),
+          _MetaTile(label: 'Study', value: meta.studyInstanceUid, mono: true),
         ],
       ),
     );
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Section header
-// ────────────────────────────────────────────────────────────
-
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});
-
   final String title;
-
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.8,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-    );
+    return Text(title,
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: Theme.of(context).colorScheme.primary));
   }
 }
-
-// ────────────────────────────────────────────────────────────
-// Metadata grid (2 columns)
-// ────────────────────────────────────────────────────────────
 
 class _MetaGrid extends StatelessWidget {
   const _MetaGrid({required this.children});
-
   final List<Widget> children;
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: children.map((child) {
-            return SizedBox(
-              width: (constraints.maxWidth - 8) / 2,
-              child: child,
-            );
-          }).toList(),
-        );
-      },
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: children.map((child) {
+          return SizedBox(width: (constraints.maxWidth - 8) / 2, child: child);
+        }).toList(),
+      );
+    });
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Metadata tile
-// ────────────────────────────────────────────────────────────
-
 class _MetaTile extends StatelessWidget {
-  const _MetaTile({
-    required this.label,
-    required this.value,
-    this.mono = false,
-  });
-
-  final String label;
-  final String value;
+  const _MetaTile(
+      {required this.label, required this.value, this.mono = false});
+  final String label, value;
   final bool mono;
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -837,25 +1313,19 @@ class _MetaTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 2),
-          Text(
-            value == 'Unknown' ? '—' : value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              fontFamily: mono ? 'monospace' : null,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(value == 'Unknown' ? '—' : value,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: mono ? 'monospace' : null),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );

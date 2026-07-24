@@ -3,6 +3,7 @@
 
 ## 0.2.0
 
+- From here on, dicom_toolkit was born.
 - **(BREAKING)** package renamed from `flutter_dicom` to `dicom_toolkit`
   - Update imports to `package:dicom_toolkit/dicom_toolkit.dart`
   - `DicomController` → `DicomViewerController`; `DicomService` removed

@@ -1,3 +1,6 @@
+## 0.2.1
+- Removed `dart:io` import completely. accepting only bytes as input.
+
 ## 0.2.0
 
 - **(BREAKING)** package renamed from `flutter_dicom` to `dicom_toolkit`

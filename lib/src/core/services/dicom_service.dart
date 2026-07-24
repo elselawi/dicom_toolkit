@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../rust/api/core/config/dicom_config.dart';
 import '../../rust/api/core/models/dicom_frame_result.dart';
 import '../../rust/api/init.dart';
@@ -6,21 +8,24 @@ import '../../rust/api/init.dart';
 ///
 /// By using this interface, the SDK allows for pluggable loading strategies.
 /// For example, you could implement a `NetworkDicomLoader` to stream bytes
-/// directly from a PACS server without saving to a local file first.
+/// directly from a PACS server.
+///
+/// Loading is bytes-only by design: there is no local file system on the
+/// Web, so callers are expected to read a file's contents into memory
+/// (e.g. via a file picker or `dart:io`) before handing it to the loader.
 abstract class IDicomLoader {
-  /// Loads a DICOM object from the specified [source].
-  Future<DicomFrameResult> load(final String source,
+  /// Loads a DICOM object from raw bytes.
+  Future<DicomFrameResult> loadFromBytes(final Uint8List bytes,
       {final DicomConfig? config});
 }
 
-/// The default implementation for loading DICOM files from the local file system.
-class FileDicomLoader implements IDicomLoader {
-  /// Loads a .dcm file using the high-performance Rust bridge.
+/// The default implementation for loading DICOM files via the Rust bridge.
+class RustDicomLoader implements IDicomLoader {
   @override
-  Future<DicomFrameResult> load(final String filePath,
+  Future<DicomFrameResult> loadFromBytes(final Uint8List bytes,
       {final DicomConfig? config}) async {
     final finalConfig = config ?? await DicomConfig.default_();
-    return loadDicom(path: filePath, config: finalConfig);
+    return loadDicomFromBytes(bytes: bytes.toList(), config: finalConfig);
   }
 }
 
@@ -31,14 +36,14 @@ class FileDicomLoader implements IDicomLoader {
 class DicomService {
   /// Creates a [DicomService] with a specific loader.
   ///
-  /// Defaults to [FileDicomLoader] if no loader is provided.
+  /// Defaults to [RustDicomLoader] if no loader is provided.
   DicomService({final IDicomLoader? loader})
-      : _loader = loader ?? FileDicomLoader();
+      : _loader = loader ?? RustDicomLoader();
   final IDicomLoader _loader;
 
-  /// Requests a processed DICOM frame from the underlying loader.
-  Future<DicomFrameResult> loadFrame(final String path,
+  /// Requests a processed DICOM frame from raw bytes.
+  Future<DicomFrameResult> loadFrameFromBytes(final Uint8List bytes,
       {final DicomConfig? config}) {
-    return _loader.load(path, config: config);
+    return _loader.loadFromBytes(bytes, config: config);
   }
 }

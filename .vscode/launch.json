@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "DICOM Viewer (web)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "cwd": "example",
+            "deviceId": "chrome",
+            "args": [
+                "--web-header=Cross-Origin-Opener-Policy=same-origin",
+                "--web-header=Cross-Origin-Embedder-Policy=require-corp"
+            ]
+        },
+        {
+            "name": "DICOM Viewer (Windows)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "cwd": "example"
+        }
+    ]
+}

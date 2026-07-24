@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dicom/flutter_dicom.dart';
+import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 

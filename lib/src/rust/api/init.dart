@@ -27,3 +27,10 @@ import 'core/models/dicom_metadata.dart';
 Future<DicomFrameResult> loadDicom(
         {required final String path, required final DicomConfig config}) =>
     RustLib.instance.api.crateApiInitLoadDicom(path: path, config: config);
+
+/// Parses a DICOM file directly from an in-memory byte array.
+/// Useful for Web or environments where a local file system is unavailable.
+Future<DicomFrameResult> loadDicomFromBytes(
+        {required final List<int> bytes, required final DicomConfig config}) =>
+    RustLib.instance.api
+        .crateApiInitLoadDicomFromBytes(bytes: bytes, config: config);

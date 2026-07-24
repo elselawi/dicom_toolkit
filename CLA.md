@@ -1,9 +1,9 @@
 # Contributor License Agreement (CLA)
 
 This Contributor License Agreement ("Agreement") applies to all contributions
-submitted to the Flutter-Dicom project.
+submitted to the dicom_toolkit project.
 
-Flutter-Dicom is an open-source project intended to remain free, public, and
+dicom_toolkit is an open-source project intended to remain free, public, and
 accessible to the community.
 
 By submitting any contribution to this project, you agree to the terms below.
@@ -13,10 +13,10 @@ By submitting any contribution to this project, you agree to the terms below.
 ## 1. Definitions
 
 - "You" refers to the individual or legal entity submitting a Contribution.
-- "Project" refers to Flutter-Dicom.
+- "Project" refers to dicom_toolkit.
 - "Contribution" refers to any code, documentation, tests, examples, or other
   material submitted by You.
-- "Project Owner" refers to Mostafa Mahmoud [@MostafaSensei106](https://github.com/MostafaSensei106).
+- "Project Owner" refers to Ali A. Saleem [@elselawi](https://github.com/elselawi).
 
 ---
 
@@ -24,7 +24,7 @@ By submitting any contribution to this project, you agree to the terms below.
 
 The Project Owner commits that:
 
-- Flutter-Dicom will remain an **open-source project**
+- dicom_toolkit will remain an **open-source project**
 - The full source code will remain **publicly available**
 - Community members may freely use, study, modify, and share the project under
   the GNU General Public License (GPL)
@@ -47,7 +47,7 @@ You grant the Project Owner a **perpetual, worldwide, irrevocable, royalty-free
 license** to:
 
 - use, modify, and distribute your Contributions
-- include them as part of Flutter-Dicom
+- include them as part of dicom_toolkit
 - relicense the project, including your Contributions, when required for
   **commercial or enterprise use**
 
@@ -59,7 +59,7 @@ This right exists **only to allow commercial licensing for companies**, and
 ## 5. Public Licensing (GPL)
 
 - All Contributions will be made publicly available under the
-  **GNU General Public License (GPL)** as part of Flutter-Dicom.
+  **GNU General Public License (GPL)** as part of dicom_toolkit.
 - Anyone may use the project for free as long as they comply with the GPL.
 
 ---
@@ -85,5 +85,5 @@ You confirm that:
 
 ## 8. Acceptance
 
-Submitting a Contribution to Flutter-Dicom means you accept this Agreement.
+Submitting a Contribution to dicom_toolkit means you accept this Agreement.
 If you do not agree with these terms, please do not contribute.

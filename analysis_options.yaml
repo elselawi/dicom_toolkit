@@ -14,7 +14,9 @@
 include: package:lints/recommended.yaml
 
 exclude:
-- "lib/src/rust/**"
+  - "lib/src/rust/**"
+  - "cargokit/**"
+  - "example/**"
 
 # Specify additional rules.
 linter:

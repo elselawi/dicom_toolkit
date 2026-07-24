@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter_dicom/flutter_dicom.dart';
+import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -11,13 +11,27 @@ void main() {
   late MockDicomService mockService;
 
   const testMetadata = DicomMetadata(
+    patientId: 'TEST-001',
+    patientName: 'Test Patient',
+    studyDate: '20240101',
+    studyDescription: 'Test Study',
+    modality: 'CT',
+    manufacturer: 'Test Manufacturer',
+    manufacturerModelName: 'Test Model',
+    institutionName: 'Test Hospital',
+    studyInstanceUid: '1.2.3.4.5',
+    seriesInstanceUid: '1.2.3.4.5.1',
+    sopInstanceUid: '1.2.3.4.5.1.1',
+    seriesDescription: 'Test Series',
+    bodyPartExamined: 'CHEST',
+    sliceThickness: 1.0,
+    instanceNumber: '1',
     width: 256,
     height: 256,
     windowCenter: 50.0,
     windowWidth: 200.0,
     rescaleIntercept: 0.0,
     rescaleSlope: 1.0,
-    patientName: 'Test Patient',
     photometricInterpretation: 'MONOCHROME2',
     samplesPerPixel: 1,
     bitsAllocated: 16,
@@ -25,6 +39,10 @@ void main() {
     highBit: 15,
     pixelRepresentation: 1,
   );
+
+  setUpAll(() {
+    registerFallbackValue(Uint8List(0));
+  });
 
   setUp(() {
     mockService = MockDicomService();
@@ -39,40 +57,45 @@ void main() {
       expect(controller.metadata, isNull);
     });
 
-    test('loadFromFile sets loading and then state', () async {
+    test('loadFromBytes sets loading and then state', () async {
       final mockResult = DicomFrameResult(
         metadata: testMetadata,
         pixelData: Int16List.fromList(List.filled(256 * 256, 0)),
       );
+      final testBytes = Uint8List.fromList([1, 2, 3]);
 
       when(
-        () => mockService.loadFrame(any(), config: any(named: 'config')),
+        () =>
+            mockService.loadFrameFromBytes(any(), config: any(named: 'config')),
       ).thenAnswer((final _) async => mockResult);
 
       // In unit tests, initialize() will fail because of ui.FragmentProgram
       // But we can still check if isLoading is set during the process
 
       try {
-        await controller.loadFromFile(filePath: 'test.dcm');
+        await controller.loadFromBytes(bytes: testBytes);
       } catch (_) {
         // Expected to fail in unit test due to shader/texture creation
       }
 
       // We can check that it at least attempted to load
       verify(
-        () => mockService.loadFrame('test.dcm', config: any(named: 'config')),
+        () => mockService.loadFrameFromBytes(testBytes,
+            config: any(named: 'config')),
       ).called(1);
     });
 
-    test('loadFromFile handles errors correctly', () async {
+    test('loadFromBytes handles errors correctly', () async {
       when(
-        () => mockService.loadFrame(any(), config: any(named: 'config')),
+        () =>
+            mockService.loadFrameFromBytes(any(), config: any(named: 'config')),
       ).thenThrow(Exception('Load error'));
 
-      // In unit tests, it will throw because of shader init failing OR loadFrame failing
-      // We want to verify it handles the loadFrame error.
+      // In unit tests, it will throw because of shader init failing OR loadFrameFromBytes failing
+      // We want to verify it handles the loadFrameFromBytes error.
 
-      final future = controller.loadFromFile(filePath: 'test.dcm');
+      final future =
+          controller.loadFromBytes(bytes: Uint8List.fromList([1, 2, 3]));
       // expect(controller.isLoading, isTrue); // This might be too fast to catch if it fails early
 
       try {
@@ -91,7 +114,8 @@ void main() {
       );
 
       when(
-        () => mockService.loadFrame(any(), config: any(named: 'config')),
+        () =>
+            mockService.loadFrameFromBytes(any(), config: any(named: 'config')),
       ).thenAnswer((final _) async => mockResult);
 
       // We skip full load logic here because it needs real UI dependencies

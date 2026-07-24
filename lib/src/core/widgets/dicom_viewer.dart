@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/color_maps.dart';
 import '../controller/dicom_controller.dart';
 import '../shader/dicom_shader_painter.dart';
 
@@ -66,17 +67,24 @@ class DicomViewer extends StatelessWidget {
             child: InteractiveViewer(
               minScale: 0.5,
               maxScale: 10.0,
-              child: SizedBox(
-                width: double.infinity,
-                height: double.infinity,
-                // The actual Native Renderer using Fragment Shaders
-                child: CustomPaint(
-                  painter: DicomShaderPainter(
-                    frameResult: controller.currentFrame!,
-                    windowCenter: controller.windowCenter!,
-                    windowWidth: controller.windowWidth!,
-                    shader: controller.shader!,
-                    rawTexture: controller.rawTexture!,
+              child: FittedBox(
+                fit: fit,
+                child: SizedBox(
+                  width: controller.currentFrame!.metadata.width.toDouble(),
+                  height: controller.currentFrame!.metadata.height.toDouble(),
+                  // The actual Native Renderer using Fragment Shaders
+                  child: CustomPaint(
+                    painter: DicomShaderPainter(
+                      frameResult: controller.currentFrame!,
+                      windowCenter: controller.windowCenter!,
+                      windowWidth: controller.windowWidth!,
+                      shader: controller.shader!,
+                      rawTexture: controller.rawTexture!,
+                      colorLutTexture: controller.colorLutTexture,
+                      colorize: controller.colorMap != DicomColorMap.grayscale,
+                      invert: controller.invert,
+                      monochrome1: controller.isMonochrome1,
+                    ),
                   ),
                 ),
               ),

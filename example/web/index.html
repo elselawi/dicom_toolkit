@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Flutter DICOM Viewer</title>
+    <style>
+        #cross-origin-warning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: sans-serif;
+            z-index: 9999;
+            padding: 40px;
+            text-align: center;
+        }
+
+        #cross-origin-warning h2 {
+            color: #ff6b6b;
+        }
+
+        #cross-origin-warning code {
+            background: #16213e;
+            color: #00d4aa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+    </style>
+    <script>
+        // Detect missing cross-origin isolation (required for WASM SharedArrayBuffer)
+        if (typeof SharedArrayBuffer === 'undefined') {
+            document.addEventListener('DOMContentLoaded', function () {
+                document.getElementById('cross-origin-warning').style.display = 'flex';
+                document.getElementById('cross-origin-warning').style.flexDirection = 'column';
+                document.getElementById('cross-origin-warning').style.justifyContent = 'center';
+                document.getElementById('cross-origin-warning').style.alignItems = 'center';
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <div id="cross-origin-warning">
+        <h2>⚠ Cross-Origin Isolation Required</h2>
+        <p>This app needs <code>SharedArrayBuffer</code> for the Rust/WASM engine.</p>
+        <p style="margin-top: 20px; font-size: 14px; color: #aaa;">
+            Run with:
+        </p>
+        <code style="font-size: 13px; line-height: 1.8;">
+            cd example &amp;&amp; flutter run -d chrome \<br>
+            &nbsp;&nbsp;--web-header=Cross-Origin-Opener-Policy=same-origin \<br>
+            &nbsp;&nbsp;--web-header=Cross-Origin-Embedder-Policy=require-corp
+        </code>
+    </div>
+    <script src="flutter_bootstrap.js" defer></script>
+</body>
+
+</html>

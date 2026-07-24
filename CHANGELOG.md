@@ -1,3 +1,32 @@
+## 0.2.0
+
+- (BREAKING): package renamed from `flutter_dicom` to `dicom_toolkit`
+  - Update your `pubspec.yaml` dependency and all `import 'package:dicom_toolkit/dicom_toolkit.dart';` statements
+  - Rust crate renamed from `flutter_dicom` to `dicom_toolkit` (affects the native library filename on all platforms)
+  - `FlutterDicomWeb` → `DicomToolkitWeb`; `lib/flutter_dicom_web.dart` → `lib/dicom_toolkit_web.dart`
+  - `FileDicomLoader` → `RustDicomLoader`
+  - Shader asset path updated to `packages/dicom_toolkit/assets/shaders/dicom_window.frag`
+- (BREAKING): removed `DicomController.loadFromFile()`, `IDicomLoader.load()`, `DicomService.loadFrame()`, and `WebDicomLoader` — loading is now bytes-only via `loadFromBytes()` on every platform
+- (chore): project ownership and repository moved to [@elselawi](https://github.com/elselawi)
+
+## 0.1.0+3
+
+- (docs): refine performance benchmarks in README
+
+## 0.1.0+4
+
+- (feat): add `readDicomInfo()` — lightweight metadata-only API (no controller, no shaders, no pixels)
+- (feat): add `DicomFileInfo` class wrapping `filePath`, `fileName`, and `DicomMetadata`
+- (feat): expand metadata extraction from 13 to 27 DICOM tags
+  - Added patient demographics: `studyDescription`
+  - Added equipment info: `modality`, `manufacturer`, `manufacturerModelName`, `institutionName`
+  - Added identifiers: `studyInstanceUid`, `seriesInstanceUid`, `sopInstanceUid`
+  - Added acquisition details: `seriesDescription`, `bodyPartExamined`, `sliceThickness`, `instanceNumber`
+- (refactor): introduce `get_str_tag`, `get_float_tag`, `get_int_tag` helpers for cleaner tag extraction
+- (feat): add 8-bit pixel data support with signedness-aware conversion
+- (perf): reorder pixel extraction to try fast byte-chunking first, with transfer-syntax-aware fallback
+- (docs): update README with 27-field metadata table, `readDicomInfo()` guide, and usage examples
+
 ## 0.1.0+3
 
 - (docs): refine performance benchmarks in README

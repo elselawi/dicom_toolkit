@@ -10,15 +10,18 @@ import '../config/dicom_config.dart';
 import '../models/dicom_frame_result.dart';
 import '../models/dicom_metadata.dart';
 
+// These functions are ignored because they are not marked as `pub`: `get_float_tag`, `get_int_tag`, `get_str_tag`, `process_dicom_object`
+
 /// Internal utility function for parsing a DICOM file and extracting its metadata and pixels.
 ///
 /// This function uses the `dicom-rs` ecosystem to handle the complex structure of DICOM objects.
 ///
 /// # Implementation Details:
-/// - **Metadata Extraction**: It manually traverses the DICOM object looking for critical tags (SOP Class, Windowing, etc.).
-/// - **Resilience**: It provides sane defaults for missing tags often encountered in non-standard DICOM files.
-/// - **Pixel Extraction**: It attempts multiple strategies to extract raw 16-bit pixel data,
-///   falling back to raw byte manipulation if high-level API calls fail.
+/// - **Metadata Extraction**: Uses clean helper functions to extract all critical tags with
+///   sensible fallback defaults for missing or malformed headers.
+/// - **Resilience**: Provides sane defaults for missing tags often encountered in non-standard DICOM files.
+/// - **Pixel Extraction**: Attempts direct byte-chunking first (fast path for uncompressed data),
+///   falling back to the `dicom` crate's transfer-syntax-aware decoding for compressed formats.
 ///
 /// # Returns
 /// - `Ok(DicomFrameResult)` on successful processing.
@@ -27,3 +30,8 @@ Future<DicomFrameResult> processDicomFile(
         {required final String path, required final DicomConfig config}) =>
     RustLib.instance.api.crateApiCoreUtilsProcessDicomFileProcessDicomFile(
         path: path, config: config);
+
+Future<DicomFrameResult> processDicomFromBytes(
+        {required final List<int> bytes, required final DicomConfig config}) =>
+    RustLib.instance.api.crateApiCoreUtilsProcessDicomFileProcessDicomFromBytes(
+        bytes: bytes, config: config);

@@ -1,8 +1,8 @@
-# Contributing to Flutter-Dicom
+# Contributing to dicom_toolkit
 
-Thank you for your interest in contributing to Flutter-Dicom.
+Thank you for your interest in contributing to dicom_toolkit.
 
-Flutter-Dicom is an open-source project built for the community. This document
+dicom_toolkit is an open-source project built for the community. This document
 explains how to contribute and clearly describes the licensing and ownership
 model so everyone understands how the project is used and sustained.
 
@@ -12,7 +12,7 @@ Please read this document carefully before contributing.
 
 ## Project Philosophy (Please Read First)
 
-Flutter-Dicom is:
+dicom_toolkit is:
 
 - Fully open-source
 - Free for individuals, researchers, students, and the community
@@ -26,7 +26,7 @@ its development through commercial licensing when needed.
 
 ## License Overview
 
-Flutter-Dicom is released under the **GNU General Public License (GPL)**.
+dicom_toolkit is released under the **GNU General Public License (GPL)**.
 
 This means:
 
@@ -42,8 +42,8 @@ The open-source version is the **complete project**, not a limited edition.
 
 Companies or enterprises may need a **commercial license** in cases such as:
 
-- Using Flutter-Dicom inside proprietary or closed-source products
-- Using Flutter-Dicom in paid SaaS platforms without GPL compliance
+- Using dicom_toolkit inside proprietary or closed-source products
+- Using dicom_toolkit in paid SaaS platforms without GPL compliance
 - Internal corporate usage where GPL obligations are legally incompatible
 
 In these cases:
@@ -82,7 +82,7 @@ for more information, see [Contributor License Agreement (CLA)](CLA.md).
 ### Reporting Bugs
 
 Before opening a new issue, please check existing issues:
-https://github.com/MostafaSensei106/Flutter-Dicom/issues
+https://github.com/elselawi/dicom_toolkit/issues
 
 When reporting a bug, include:
 

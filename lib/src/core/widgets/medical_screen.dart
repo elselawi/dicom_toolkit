@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../controller/dicom_controller.dart';
 import 'dicom_viewer.dart';
@@ -9,11 +11,11 @@ import 'dicom_viewer.dart';
 /// * Automatic initialization and disposal of the [DicomController].
 /// * Integration of the [DicomViewer] for interactive medical scans.
 class MedicalScreen extends StatefulWidget {
-  /// Creates a [MedicalScreen] for the given [dicomPath].
-  const MedicalScreen({required this.dicomPath, this.title, super.key});
+  /// Creates a [MedicalScreen] for the given [dicomBytes].
+  const MedicalScreen({required this.dicomBytes, this.title, super.key});
 
-  /// The local file system path to the .dcm file.
-  final String dicomPath;
+  /// The raw contents of the .dcm file to display.
+  final Uint8List dicomBytes;
 
   /// The title of the screen.
   final String? title;
@@ -30,7 +32,7 @@ class _MedicalScreenState extends State<MedicalScreen> {
     super.initState();
     _dicomController = DicomController();
 
-    await _dicomController.loadFromFile(filePath: widget.dicomPath);
+    await _dicomController.loadFromBytes(bytes: widget.dicomBytes);
   }
 
   @override

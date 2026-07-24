@@ -1,6 +1,6 @@
-# flutter_dicom_example
+# dicom_toolkit_example
 
-Demonstrates how to use the flutter_dicom plugin.
+Demonstrates how to use the dicom_toolkit plugin.
 
 ## Getting Started
 

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -900101022;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -451762164;
 
 // Section: executor
 
@@ -263,6 +263,45 @@ fn wire__crate__api__init__load_dicom_impl(
         },
     )
 }
+fn wire__crate__api__init__load_dicom_from_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "load_dicom_from_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_config = <crate::api::core::config::dicom_config::DicomConfig>::sse_decode(
+                &mut deserializer,
+            );
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::init::load_dicom_from_bytes(api_bytes, api_config)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__core__utils__process_dicom_file__process_dicom_file_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -296,6 +335,48 @@ fn wire__crate__api__core__utils__process_dicom_file__process_dicom_file_impl(
                         let output_ok =
                             crate::api::core::utils::process_dicom_file::process_dicom_file(
                                 &api_path,
+                                &api_config,
+                            )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__core__utils__process_dicom_file__process_dicom_from_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "process_dicom_from_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_config = <crate::api::core::config::dicom_config::DicomConfig>::sse_decode(
+                &mut deserializer,
+            );
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::core::utils::process_dicom_file::process_dicom_from_bytes(
+                                &api_bytes,
                                 &api_config,
                             )?;
                         Ok(output_ok)
@@ -359,7 +440,21 @@ impl SseDecode for crate::api::core::models::dicom_frame_result::DicomFrameResul
 impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_patientId = <String>::sse_decode(deserializer);
         let mut var_patientName = <String>::sse_decode(deserializer);
+        let mut var_studyDate = <String>::sse_decode(deserializer);
+        let mut var_studyDescription = <String>::sse_decode(deserializer);
+        let mut var_modality = <String>::sse_decode(deserializer);
+        let mut var_manufacturer = <String>::sse_decode(deserializer);
+        let mut var_manufacturerModelName = <String>::sse_decode(deserializer);
+        let mut var_institutionName = <String>::sse_decode(deserializer);
+        let mut var_studyInstanceUid = <String>::sse_decode(deserializer);
+        let mut var_seriesInstanceUid = <String>::sse_decode(deserializer);
+        let mut var_sopInstanceUid = <String>::sse_decode(deserializer);
+        let mut var_seriesDescription = <String>::sse_decode(deserializer);
+        let mut var_bodyPartExamined = <String>::sse_decode(deserializer);
+        let mut var_sliceThickness = <f32>::sse_decode(deserializer);
+        let mut var_instanceNumber = <String>::sse_decode(deserializer);
         let mut var_photometricInterpretation = <String>::sse_decode(deserializer);
         let mut var_width = <u32>::sse_decode(deserializer);
         let mut var_height = <u32>::sse_decode(deserializer);
@@ -373,7 +468,21 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_highBit = <u16>::sse_decode(deserializer);
         let mut var_pixelRepresentation = <u16>::sse_decode(deserializer);
         return crate::api::core::models::dicom_metadata::DicomMetadata {
+            patient_id: var_patientId,
             patient_name: var_patientName,
+            study_date: var_studyDate,
+            study_description: var_studyDescription,
+            modality: var_modality,
+            manufacturer: var_manufacturer,
+            manufacturer_model_name: var_manufacturerModelName,
+            institution_name: var_institutionName,
+            study_instance_uid: var_studyInstanceUid,
+            series_instance_uid: var_seriesInstanceUid,
+            sop_instance_uid: var_sopInstanceUid,
+            series_description: var_seriesDescription,
+            body_part_examined: var_bodyPartExamined,
+            slice_thickness: var_sliceThickness,
+            instance_number: var_instanceNumber,
             photometric_interpretation: var_photometricInterpretation,
             width: var_width,
             height: var_height,
@@ -496,7 +605,14 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         5 => wire__crate__api__init__init_app_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__init__load_dicom_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__utils__process_dicom_file__process_dicom_file_impl(
+        7 => wire__crate__api__init__load_dicom_from_bytes_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__utils__process_dicom_file__process_dicom_file_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        9 => wire__crate__api__core__utils__process_dicom_file__process_dicom_from_bytes_impl(
             port,
             ptr,
             rust_vec_len,
@@ -570,7 +686,21 @@ impl
 impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata::DicomMetadata {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.patient_id.into_into_dart().into_dart(),
             self.patient_name.into_into_dart().into_dart(),
+            self.study_date.into_into_dart().into_dart(),
+            self.study_description.into_into_dart().into_dart(),
+            self.modality.into_into_dart().into_dart(),
+            self.manufacturer.into_into_dart().into_dart(),
+            self.manufacturer_model_name.into_into_dart().into_dart(),
+            self.institution_name.into_into_dart().into_dart(),
+            self.study_instance_uid.into_into_dart().into_dart(),
+            self.series_instance_uid.into_into_dart().into_dart(),
+            self.sop_instance_uid.into_into_dart().into_dart(),
+            self.series_description.into_into_dart().into_dart(),
+            self.body_part_examined.into_into_dart().into_dart(),
+            self.slice_thickness.into_into_dart().into_dart(),
+            self.instance_number.into_into_dart().into_dart(),
             self.photometric_interpretation.into_into_dart().into_dart(),
             self.width.into_into_dart().into_dart(),
             self.height.into_into_dart().into_dart(),
@@ -642,7 +772,21 @@ impl SseEncode for crate::api::core::models::dicom_frame_result::DicomFrameResul
 impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.patient_id, serializer);
         <String>::sse_encode(self.patient_name, serializer);
+        <String>::sse_encode(self.study_date, serializer);
+        <String>::sse_encode(self.study_description, serializer);
+        <String>::sse_encode(self.modality, serializer);
+        <String>::sse_encode(self.manufacturer, serializer);
+        <String>::sse_encode(self.manufacturer_model_name, serializer);
+        <String>::sse_encode(self.institution_name, serializer);
+        <String>::sse_encode(self.study_instance_uid, serializer);
+        <String>::sse_encode(self.series_instance_uid, serializer);
+        <String>::sse_encode(self.sop_instance_uid, serializer);
+        <String>::sse_encode(self.series_description, serializer);
+        <String>::sse_encode(self.body_part_examined, serializer);
+        <f32>::sse_encode(self.slice_thickness, serializer);
+        <String>::sse_encode(self.instance_number, serializer);
         <String>::sse_encode(self.photometric_interpretation, serializer);
         <u32>::sse_encode(self.width, serializer);
         <u32>::sse_encode(self.height, serializer);

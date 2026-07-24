@@ -553,6 +553,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dicom_toolkit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dicom",
+ "flutter_rust_bridge",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -718,15 +727,6 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "flutter_dicom"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dicom",
- "flutter_rust_bridge",
 ]
 
 [[package]]

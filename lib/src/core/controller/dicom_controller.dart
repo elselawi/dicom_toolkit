@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../../rust/api/core/config/dicom_config.dart';
 import '../../rust/api/core/models/dicom_frame_result.dart';
 import '../../rust/api/core/models/dicom_metadata.dart';
+import '../constants/color_maps.dart';
 import '../constants/lib_shaders.dart';
 import '../exceptions/dicom_exceptions.dart';
 import '../services/dicom_service.dart';
@@ -26,7 +27,7 @@ import '../services/dicom_service.dart';
 /// ```dart
 /// final controller = DicomController();
 /// await controller.initialize();
-/// await controller.loadFromFile(filePath: 'path/to/scan.dcm');
+/// await controller.loadFromBytes(bytes: fileBytes);
 /// ```
 class DicomController extends ChangeNotifier {
   /// Creates a [DicomController].
@@ -46,6 +47,13 @@ class DicomController extends ChangeNotifier {
   // --- Interactive State (Windowing) ---
   double? _currentWindowCenter;
   double? _currentWindowWidth;
+
+  // --- Colorization State ---
+  DicomColorMap _colorMap = DicomColorMap.grayscale;
+  ui.Image? _colorLutTexture;
+
+  // --- Invert & Display State ---
+  bool _invert = false;
 
   // --- Getters ---
 
@@ -80,9 +88,28 @@ class DicomController extends ChangeNotifier {
   /// The current Window Width being applied to the image.
   double? get windowWidth => _currentWindowWidth;
 
+  /// The active color map for image colorization.
+  DicomColorMap get colorMap => _colorMap;
+
+  /// The 256×1 RGBA color LUT texture, or null if grayscale.
+  ui.Image? get colorLutTexture => _colorLutTexture;
+
+  /// Whether grayscale inversion is active.
+  bool get invert => _invert;
+
+  /// Toggles the grayscale invert state and notifies listeners.
+  void toggleInvert() {
+    _invert = !_invert;
+    notifyListeners();
+  }
+
+  /// Returns true if the current image uses MONOCHROME1 photometric interpretation.
+  bool get isMonochrome1 =>
+      _currentFrame?.metadata.photometricInterpretation == 'MONOCHROME1';
+
   /// Loads the necessary fragment shaders from the plugin assets.
   ///
-  /// This must be called (directly or implicitly via [loadFromFile]) before any rendering can happen.
+  /// This must be called (directly or implicitly via [loadFromBytes]) before any rendering can happen.
   Future<void> initialize() async {
     if (_shader != null) return;
     try {
@@ -97,15 +124,19 @@ class DicomController extends ChangeNotifier {
     }
   }
 
-  /// Loads a DICOM file from the local file system.
+  /// Loads a DICOM object from raw bytes already in memory.
   ///
   /// This triggers the heavy lifting in the Rust engine on a background thread.
   /// Once parsed, the raw pixel data is automatically converted into a GPU-ready texture.
   ///
-  /// [filePath] - Absolute path to the .dcm file.
+  /// Loading is bytes-only by design (there is no local file system on the
+  /// Web). Pair this with a file picker configured to return bytes (e.g.
+  /// `package:file_picker`'s `PlatformFile.bytes`, using `withData: true`).
+  ///
+  /// [bytes] - The raw contents of a .dcm file.
   /// [config] - Optional configuration to tune the Rust engine.
-  Future<void> loadFromFile({
-    required final String filePath,
+  Future<void> loadFromBytes({
+    required final Uint8List bytes,
     final DicomConfig? config,
   }) async {
     if (_isLoading) return;
@@ -115,8 +146,7 @@ class DicomController extends ChangeNotifier {
     _clearError();
 
     try {
-      // Use the service to load the frame
-      final result = await _service.loadFrame(filePath, config: config);
+      final result = await _service.loadFrameFromBytes(bytes, config: config);
       _currentFrame = result;
 
       // Create GPU texture from raw pixel data
@@ -194,7 +224,7 @@ class DicomController extends ChangeNotifier {
       _currentWindowCenter = center;
     }
     if (width != null) {
-      _currentWindowWidth = width.clamp(1.0, 8000.0);
+      _currentWindowWidth = width.clamp(1.0, 65536.0);
     }
 
     notifyListeners();
@@ -208,6 +238,36 @@ class DicomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the active color map and generates the corresponding LUT texture.
+  ///
+  /// Pass [DicomColorMap.grayscale] to disable colorization.
+  Future<void> setColorMap(final DicomColorMap map) async {
+    if (_colorMap == map && _colorLutTexture != null) return;
+    _colorMap = map;
+
+    // Dispose old LUT texture
+    _colorLutTexture?.dispose();
+    _colorLutTexture = null;
+
+    if (map == DicomColorMap.grayscale) {
+      notifyListeners();
+      return;
+    }
+
+    // Generate LUT texture
+    final lutBytes = ColorMapLut.generate(map);
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      lutBytes,
+      256,
+      1,
+      ui.PixelFormat.rgba8888,
+      (final ui.Image img) => completer.complete(img),
+    );
+    _colorLutTexture = await completer.future;
+    notifyListeners();
+  }
+
   /// Clears the current session data and frees memory.
   void clear() {
     _currentFrame = null;
@@ -215,6 +275,10 @@ class DicomController extends ChangeNotifier {
     _rawTexture = null;
     _currentWindowCenter = null;
     _currentWindowWidth = null;
+    _colorLutTexture?.dispose();
+    _colorLutTexture = null;
+    _colorMap = DicomColorMap.grayscale;
+    _invert = false;
     _clearError();
     notifyListeners();
   }
@@ -223,6 +287,7 @@ class DicomController extends ChangeNotifier {
   @override
   void dispose() {
     _rawTexture?.dispose();
+    _colorLutTexture?.dispose();
     super.dispose();
   }
 

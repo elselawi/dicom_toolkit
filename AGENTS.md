@@ -57,7 +57,7 @@ rust/
       init.rs                       ← load_dicom / load_dicom_from_bytes FFI entry
       core/
         config/dicom_config.rs      ← auto_normalize, skip_pixels
-        models/dicom_metadata.rs    ← 28-field struct + Default impl
+        models/dicom_metadata.rs    ← 32-field struct + Default impl
         models/dicom_frame_result.rs← metadata + Vec<i16>
         constants/lib_constants.rs  ← DefaultConfigs consts
         utils/process_dicom_file.rs ← THE CORE: parses .dcm, extracts tags+pixels
@@ -68,7 +68,7 @@ web/pkg/                            ← WASM + JS bindings (wasm-pack output)
 example/web/pkg/                    ← copy for example app
 
 test/
-  dicom_tag_id_test.dart            ← 28 constants, equality, hex
+  dicom_tag_id_test.dart            ← 31 constants, equality, hex
   dicom_pixel_data_test.dart        ← sealed hierarchy, buffer
   dicom_window_preset_test.dart     ← 7 presets, forImage(), equality
   dicom_metadata_test.dart          ← typed getters, tag(), pixelSpacing
@@ -90,7 +90,7 @@ test/
 
 1. `DicomToolkit.init()` — loads native library / WASM
 2. `DicomParser.parse(bytes)` → `DicomDecoder.decode()` → `loadDicomFromBytes()` FFI
-3. Rust `process_dicom_file.rs`: opens DICOM, extracts 28 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels
+3. Rust `process_dicom_file.rs`: opens DICOM, extracts 32 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels
 4. `DicomParseResult.fromFrame()`: wraps generated metadata → `DicomMetadata` wrapper, packs pixels → `DicomInt16PixelData`
 5. `DicomRenderer`: compiles GLSL shader, packs 16-bit → RGBA (+32768 offset), renders via `PictureRecorder` → `ui.Image`
 6. `DicomViewer`: `CustomPaint` → `DicomShaderPainter` → shader (windowing + HU + color LUT), wrapped in `Transform.rotate`

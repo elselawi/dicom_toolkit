@@ -30,8 +30,8 @@
 
 | Type | Description |
 |------|------------|
-| `DicomTagId` | Immutable DICOM tag (group, element) — 28 predefined constants |
-| `DicomMetadata` | 28 typed getters + generic `tag()` lookup |
+| `DicomTagId` | Immutable DICOM tag (group, element) — 32 predefined constants |
+| `DicomMetadata` | 32 typed getters + generic `tag()` lookup + `bestDate` resolution |
 | `DicomPixelData` | Sealed class — `DicomInt16PixelData` for 16-bit monochrome |
 | `DicomParseResult` | Parsed frame: `metadata` + `pixelData` + `frame()` + `computeRoi()` |
 | `DicomColorMap` | Enum: `grayscale`, `hotIron`, `pet`, `rainbow`, `cool`, `bone` |
@@ -215,11 +215,12 @@ DicomViewer(
 ### `DicomTagId` — tag constants for generic lookup
 
 ```dart
-// 28 predefined constants:
+// 32 predefined constants:
 DicomTagId.patientName               // (0010,0010)
 DicomTagId.modality                  // (0008,0060)
 DicomTagId.pixelSpacing              // (0028,0030)
 DicomTagId.imagerPixelSpacing        // (0018,1164)
+DicomTagId.toothNumber               // (0018,6032) — ISO 3950 FDI
 
 // Create custom tags:
 const tag = DicomTagId.fromParts(0x0020, 0x0032);   // ImagePositionPatient
@@ -230,13 +231,36 @@ meta.tag(DicomTagId.patientName);    // "John Doe"
 meta.allTags;                        // Map<DicomTagId, String>
 ```
 
+### `bestDate` — resolve the most relevant date
+
+```dart
+// DICOM files can carry up to four date tags: Study Date (0008,0020),
+// Series Date (0008,0021), Acquisition Date (0008,0022), and
+// Content Date (0008,0023).  `bestDate` returns the most recent valid
+// one that is not in the future:
+
+final date = result.metadata.bestDate;  // DateTime? — null if none valid
+if (date != null) {
+  print('${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}');
+}
+
+// All four raw date strings are also available as typed getters:
+print(result.metadata.studyDate);        // "20240315" or "Unknown"
+print(result.metadata.seriesDate);       // "20240314" or "Unknown"
+print(result.metadata.acquisitionDate);  // "20240314" or "Unknown"
+print(result.metadata.contentDate);      // "20240315" or "Unknown"
+```
+
 ---
 
-## 28 extracted DICOM tags
+## 32 extracted DICOM tags
 
 | Category | Tags |
 |---|---|
-| Patient | `patientId`, `patientName`, `studyDate`, `studyDescription` |
+| Patient | `patientId`, `patientName`, `studyDescription` |
+| Dates | `studyDate`, `seriesDate`, `acquisitionDate`, `contentDate` |
+| Dental | `toothInfo` (tries standard Tooth Number, Tooth Region, then 6 vendor private tags) |
 | Equipment | `modality`, `manufacturer`, `manufacturerModelName`, `institutionName` |
 | UIDs | `studyInstanceUid`, `seriesInstanceUid`, `sopInstanceUid` |
 | Acquisition | `seriesDescription`, `bodyPartExamined`, `sliceThickness`, `instanceNumber` |

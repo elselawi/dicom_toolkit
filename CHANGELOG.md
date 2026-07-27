@@ -1,4 +1,19 @@
+## 0.2.2
+
+- **(feat)** expanded DICOM date extraction to 4 tags: `studyDate` (0008,0020), `seriesDate` (0008,0021), `acquisitionDate` (0008,0022), `contentDate` (0008,0023)
+- **(feat)** `DicomMetadata.bestDate` — resolves the most recent valid non-future date among all four date tags; handles DICOM date ranges, leap years, and malformed values
+- **(feat)** `DicomMetadata.toothInfo` — extracts tooth identification from dental DICOMs via cascade: standard Tooth Number (0018,6032), Tooth Region (0018,6033), then vendor private tags (Planmeca, Carestream, VATECH, Sirona, Dexis, KaVo), with generic fallbacks (`ImageComments`, `AcquisitionProtocolName`, `AcquisitionContextDescription`)
+- **(feat)** new `DicomTagId` constants: `seriesDate`, `acquisitionDate`, `contentDate`, `toothNumber`, `toothRegion`
+- **(refactor)** Rust `DicomMetadata` struct: 28→32 fields (added `series_date`, `acquisition_date`, `content_date`, `tooth_info`)
+- **(refactor)** `dicom_decoder.dart` tag map updated with new date and tooth tag entries
+- **(docs)** README: 28→32 extracted tags table, new Dates and Dental categories, `bestDate` usage section
+- **(docs)** AGENTS.md: updated field count and tag counts throughout
+- **(test)** 21 new tests: 11 `bestDate` edge cases, 5 tooth info tests, 5 date field delegation tests
+- **(example)** metadata tab: new Dates section (best date + all 4 raw dates), Tooth tile in Acquisition section; viewer overlay uses `bestDate`
+
+
 ## 0.2.1
+
 - Removed `dart:io` import completely. accepting only bytes as input.
 
 ## 0.2.0

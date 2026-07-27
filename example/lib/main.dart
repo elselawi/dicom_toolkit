@@ -482,7 +482,7 @@ class _ToolkitScreenState extends State<ToolkitScreen> {
                             fontWeight: FontWeight.w600,
                             fontSize: 15)),
                     Text(
-                      '${meta.studyDate != 'Unknown' ? '${meta.studyDate}  ·  ' : ''}'
+                      '${_formatDateOrUnknown(meta.bestDate)}  ·  '
                       '${meta.width}×${meta.height}',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.6),
@@ -1211,6 +1211,22 @@ class _MetadataTab extends StatelessWidget {
             _MetaTile(label: 'Study', value: meta.studyDescription),
           ]),
           const SizedBox(height: 16),
+          _SectionHeader(title: 'Dates'),
+          const SizedBox(height: 6),
+          _MetaGrid(children: [
+            _MetaTile(
+                label: 'Best date',
+                value: meta.bestDate != null
+                    ? '${meta.bestDate!.year}-'
+                        '${meta.bestDate!.month.toString().padLeft(2, '0')}-'
+                        '${meta.bestDate!.day.toString().padLeft(2, '0')}'
+                    : 'N/A'),
+            _MetaTile(label: 'Study', value: meta.studyDate),
+            _MetaTile(label: 'Series', value: meta.seriesDate),
+            _MetaTile(label: 'Acquisition', value: meta.acquisitionDate),
+            _MetaTile(label: 'Content', value: meta.contentDate),
+          ]),
+          const SizedBox(height: 16),
           _SectionHeader(title: 'Equipment'),
           const SizedBox(height: 6),
           _MetaGrid(children: [
@@ -1230,6 +1246,7 @@ class _MetadataTab extends StatelessWidget {
                 value: meta.sliceThickness > 0
                     ? '${meta.sliceThickness} mm'
                     : 'N/A'),
+            _MetaTile(label: 'Tooth', value: meta.toothInfo),
             _MetaTile(label: 'Samples/px', value: '${meta.samplesPerPixel}'),
           ]),
           const SizedBox(height: 16),
@@ -1278,6 +1295,14 @@ class _SectionHeader extends StatelessWidget {
             letterSpacing: 0.8,
             color: Theme.of(context).colorScheme.primary));
   }
+}
+
+/// Formats a [DateTime] as YYYYMMDD, or returns "Unknown" if null.
+String _formatDateOrUnknown(DateTime? dt) {
+  if (dt == null) return 'Unknown';
+  return '${dt.year}'
+      '${dt.month.toString().padLeft(2, '0')}'
+      '${dt.day.toString().padLeft(2, '0')}';
 }
 
 class _MetaGrid extends StatelessWidget {

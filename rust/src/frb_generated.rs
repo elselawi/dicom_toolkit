@@ -443,6 +443,9 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_patientId = <String>::sse_decode(deserializer);
         let mut var_patientName = <String>::sse_decode(deserializer);
         let mut var_studyDate = <String>::sse_decode(deserializer);
+        let mut var_seriesDate = <String>::sse_decode(deserializer);
+        let mut var_acquisitionDate = <String>::sse_decode(deserializer);
+        let mut var_contentDate = <String>::sse_decode(deserializer);
         let mut var_studyDescription = <String>::sse_decode(deserializer);
         let mut var_modality = <String>::sse_decode(deserializer);
         let mut var_manufacturer = <String>::sse_decode(deserializer);
@@ -453,6 +456,7 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_sopInstanceUid = <String>::sse_decode(deserializer);
         let mut var_seriesDescription = <String>::sse_decode(deserializer);
         let mut var_bodyPartExamined = <String>::sse_decode(deserializer);
+        let mut var_toothInfo = <String>::sse_decode(deserializer);
         let mut var_sliceThickness = <f32>::sse_decode(deserializer);
         let mut var_instanceNumber = <String>::sse_decode(deserializer);
         let mut var_photometricInterpretation = <String>::sse_decode(deserializer);
@@ -472,6 +476,9 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
             patient_id: var_patientId,
             patient_name: var_patientName,
             study_date: var_studyDate,
+            series_date: var_seriesDate,
+            acquisition_date: var_acquisitionDate,
+            content_date: var_contentDate,
             study_description: var_studyDescription,
             modality: var_modality,
             manufacturer: var_manufacturer,
@@ -482,6 +489,7 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
             sop_instance_uid: var_sopInstanceUid,
             series_description: var_seriesDescription,
             body_part_examined: var_bodyPartExamined,
+            tooth_info: var_toothInfo,
             slice_thickness: var_sliceThickness,
             instance_number: var_instanceNumber,
             photometric_interpretation: var_photometricInterpretation,
@@ -691,6 +699,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata:
             self.patient_id.into_into_dart().into_dart(),
             self.patient_name.into_into_dart().into_dart(),
             self.study_date.into_into_dart().into_dart(),
+            self.series_date.into_into_dart().into_dart(),
+            self.acquisition_date.into_into_dart().into_dart(),
+            self.content_date.into_into_dart().into_dart(),
             self.study_description.into_into_dart().into_dart(),
             self.modality.into_into_dart().into_dart(),
             self.manufacturer.into_into_dart().into_dart(),
@@ -701,6 +712,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata:
             self.sop_instance_uid.into_into_dart().into_dart(),
             self.series_description.into_into_dart().into_dart(),
             self.body_part_examined.into_into_dart().into_dart(),
+            self.tooth_info.into_into_dart().into_dart(),
             self.slice_thickness.into_into_dart().into_dart(),
             self.instance_number.into_into_dart().into_dart(),
             self.photometric_interpretation.into_into_dart().into_dart(),
@@ -778,6 +790,9 @@ impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
         <String>::sse_encode(self.patient_id, serializer);
         <String>::sse_encode(self.patient_name, serializer);
         <String>::sse_encode(self.study_date, serializer);
+        <String>::sse_encode(self.series_date, serializer);
+        <String>::sse_encode(self.acquisition_date, serializer);
+        <String>::sse_encode(self.content_date, serializer);
         <String>::sse_encode(self.study_description, serializer);
         <String>::sse_encode(self.modality, serializer);
         <String>::sse_encode(self.manufacturer, serializer);
@@ -788,6 +803,7 @@ impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
         <String>::sse_encode(self.sop_instance_uid, serializer);
         <String>::sse_encode(self.series_description, serializer);
         <String>::sse_encode(self.body_part_examined, serializer);
+        <String>::sse_encode(self.tooth_info, serializer);
         <f32>::sse_encode(self.slice_thickness, serializer);
         <String>::sse_encode(self.instance_number, serializer);
         <String>::sse_encode(self.photometric_interpretation, serializer);

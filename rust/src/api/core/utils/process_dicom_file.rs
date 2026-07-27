@@ -46,6 +46,12 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         get_str_tag(&obj, tags::PATIENT_NAME).unwrap_or_else(|| default_meta.patient_name.clone());
     let study_date =
         get_str_tag(&obj, tags::STUDY_DATE).unwrap_or_else(|| default_meta.study_date.clone());
+    let series_date =
+        get_str_tag(&obj, tags::SERIES_DATE).unwrap_or_else(|| default_meta.series_date.clone());
+    let acquisition_date = get_str_tag(&obj, tags::ACQUISITION_DATE)
+        .unwrap_or_else(|| default_meta.acquisition_date.clone());
+    let content_date =
+        get_str_tag(&obj, tags::CONTENT_DATE).unwrap_or_else(|| default_meta.content_date.clone());
     let study_description = get_str_tag(&obj, tags::STUDY_DESCRIPTION)
         .unwrap_or_else(|| default_meta.study_description.clone());
 
@@ -72,6 +78,23 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         .unwrap_or_else(|| default_meta.series_description.clone());
     let body_part_examined = get_str_tag(&obj, tags::BODY_PART_EXAMINED)
         .unwrap_or_else(|| default_meta.body_part_examined.clone());
+
+    // --- Tooth Identification (dental DICOM) ---
+    // Tries standard tags first, then vendor-specific private tags,
+    // then generic description fields that may contain tooth/location info.
+    let tooth_info = get_str_tag(&obj, Tag(0x0018, 0x6032)) // Tooth Number
+        .or_else(|| get_str_tag(&obj, Tag(0x0018, 0x6033))) // Tooth Region
+        .or_else(|| get_str_tag(&obj, Tag(0x0021, 0x1000))) // Planmeca
+        .or_else(|| get_str_tag(&obj, Tag(0x0029, 0x1010))) // Carestream
+        .or_else(|| get_str_tag(&obj, Tag(0x7053, 0x1003))) // VATECH
+        .or_else(|| get_str_tag(&obj, Tag(0x0021, 0x1005))) // Sirona
+        .or_else(|| get_str_tag(&obj, Tag(0x0029, 0x1060))) // Dexis
+        .or_else(|| get_str_tag(&obj, Tag(0x0021, 0x1030))) // KaVo
+        .or_else(|| get_str_tag(&obj, tags::IMAGE_COMMENTS))
+        .or_else(|| get_str_tag(&obj, tags::ACQUISITION_PROTOCOL_NAME))
+        .or_else(|| get_str_tag(&obj, tags::ACQUISITION_CONTEXT_DESCRIPTION))
+        .unwrap_or_default();
+
     let slice_thickness =
         get_float_tag(&obj, tags::SLICE_THICKNESS, default_meta.slice_thickness);
     let instance_number =
@@ -113,6 +136,9 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         patient_id,
         patient_name,
         study_date,
+        series_date,
+        acquisition_date,
+        content_date,
         study_description,
         modality,
         manufacturer,
@@ -123,6 +149,7 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         sop_instance_uid,
         series_description,
         body_part_examined,
+        tooth_info,
         slice_thickness,
         instance_number,
         photometric_interpretation,

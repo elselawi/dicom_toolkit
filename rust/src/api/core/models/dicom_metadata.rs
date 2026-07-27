@@ -11,6 +11,12 @@ pub struct DicomMetadata {
     pub patient_name: String,
     /// The date the study was performed, in DICOM format (YYYYMMDD). Tag (0008,0020).
     pub study_date: String,
+    /// The date the series was acquired, in DICOM format (YYYYMMDD). Tag (0008,0021).
+    pub series_date: String,
+    /// The date the image was acquired, in DICOM format (YYYYMMDD). Tag (0008,0022).
+    pub acquisition_date: String,
+    /// The date the image pixel data was created, in DICOM format (YYYYMMDD). Tag (0008,0023).
+    pub content_date: String,
     /// A description of the study (e.g., "R/O pneumonia"). Tag (0008,1030).
     pub study_description: String,
 
@@ -37,6 +43,10 @@ pub struct DicomMetadata {
     pub series_description: String,
     /// The body part examined (e.g., "CHEST", "ABDOMEN"). Tag (0018,0015).
     pub body_part_examined: String,
+    /// Tooth identification — tries standard Tooth Number (0018,6032),
+    /// Tooth Region (0018,6033), then vendor-specific private tags
+    /// (Planmeca, Carestream, VATECH, Sirona, Dexis, KaVo). Tag (0018,6032).
+    pub tooth_info: String,
     /// The slice thickness in mm. Tag (0018,0050).
     pub slice_thickness: f32,
     /// The instance (frame) number within the series. Tag (0020,0013).
@@ -88,6 +98,9 @@ impl DicomMetadata {
             patient_id: data.patient_id,
             patient_name: data.patient_name,
             study_date: data.study_date,
+            series_date: data.series_date,
+            acquisition_date: data.acquisition_date,
+            content_date: data.content_date,
             study_description: data.study_description,
             modality: data.modality,
             manufacturer: data.manufacturer,
@@ -98,6 +111,7 @@ impl DicomMetadata {
             sop_instance_uid: data.sop_instance_uid,
             series_description: data.series_description,
             body_part_examined: data.body_part_examined,
+            tooth_info: data.tooth_info,
             slice_thickness: data.slice_thickness,
             instance_number: data.instance_number,
             photometric_interpretation: data.photometric_interpretation,
@@ -124,6 +138,9 @@ impl Default for DicomMetadata {
             patient_id: "Unknown".to_string(),
             patient_name: "Unknown".to_string(),
             study_date: "Unknown".to_string(),
+            series_date: "Unknown".to_string(),
+            acquisition_date: "Unknown".to_string(),
+            content_date: "Unknown".to_string(),
             study_description: "Unknown".to_string(),
             modality: "Unknown".to_string(),
             manufacturer: "Unknown".to_string(),
@@ -134,6 +151,7 @@ impl Default for DicomMetadata {
             sop_instance_uid: "Unknown".to_string(),
             series_description: "Unknown".to_string(),
             body_part_examined: "Unknown".to_string(),
+            tooth_info: "Unknown".to_string(),
             slice_thickness: 0.0,
             instance_number: "0".to_string(),
             photometric_interpretation: "MONOCHROME2".to_string(),

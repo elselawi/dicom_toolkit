@@ -19,11 +19,19 @@ generated.DicomMetadata _buildInner({
   final String photometricInterpretation = 'MONOCHROME2',
   final int bitsAllocated = 16,
   final int bitsStored = 12,
+  final String studyDate = '20240101',
+  final String seriesDate = 'Unknown',
+  final String acquisitionDate = 'Unknown',
+  final String contentDate = 'Unknown',
+  final String toothInfo = 'Unknown',
 }) =>
     generated.DicomMetadata(
       patientId: patientId,
       patientName: patientName,
-      studyDate: '20240101',
+      studyDate: studyDate,
+      seriesDate: seriesDate,
+      acquisitionDate: acquisitionDate,
+      contentDate: contentDate,
       studyDescription: 'Test Study',
       modality: modality,
       manufacturer: 'TestCo',
@@ -34,6 +42,7 @@ generated.DicomMetadata _buildInner({
       sopInstanceUid: '1.2.3.4.5.1.1',
       seriesDescription: 'Test Series',
       bodyPartExamined: 'CHEST',
+      toothInfo: toothInfo,
       sliceThickness: 1.0,
       instanceNumber: '1',
       photometricInterpretation: photometricInterpretation,
@@ -81,6 +90,9 @@ void main() {
       expect(meta.patientName, isNotEmpty);
       expect(meta.patientId, isNotEmpty);
       expect(meta.studyDate, isNotEmpty);
+      expect(meta.seriesDate, isNotEmpty);
+      expect(meta.acquisitionDate, isNotEmpty);
+      expect(meta.contentDate, isNotEmpty);
       expect(meta.studyDescription, isNotEmpty);
       expect(meta.modality, isNotEmpty);
       expect(meta.manufacturer, isNotEmpty);
@@ -91,6 +103,7 @@ void main() {
       expect(meta.sopInstanceUid, isNotEmpty);
       expect(meta.seriesDescription, isNotEmpty);
       expect(meta.bodyPartExamined, isNotEmpty);
+      expect(meta.toothInfo, isNotEmpty);
       expect(meta.instanceNumber, isNotEmpty);
       expect(meta.photometricInterpretation, isNotEmpty);
 
@@ -164,6 +177,255 @@ void main() {
       final inner = _buildInner(pixelRepresentation: 1);
       final meta = DicomMetadata(inner: inner);
       expect(meta.pixelRepresentation, 1);
+    });
+  });
+
+  group('Date fields', () {
+    test('studyDate delegates to inner', () {
+      final inner = _buildInner(studyDate: '20240315');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.studyDate, '20240315');
+    });
+
+    test('seriesDate delegates to inner', () {
+      final inner = _buildInner(seriesDate: '20240314');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.seriesDate, '20240314');
+    });
+
+    test('acquisitionDate delegates to inner', () {
+      final inner = _buildInner(acquisitionDate: '20240313');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.acquisitionDate, '20240313');
+    });
+
+    test('contentDate delegates to inner', () {
+      final inner = _buildInner(contentDate: '20240312');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.contentDate, '20240312');
+    });
+
+    test('all date getters default to "Unknown"', () {
+      final inner = _buildInner(
+        studyDate: 'Unknown',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.studyDate, 'Unknown');
+      expect(meta.seriesDate, 'Unknown');
+      expect(meta.acquisitionDate, 'Unknown');
+      expect(meta.contentDate, 'Unknown');
+    });
+  });
+
+  group('bestDate', () {
+    test('returns studyDate when it is the only valid date', () {
+      final inner = _buildInner(studyDate: '20240115');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 1, 15));
+    });
+
+    test('returns the most recent valid date among all four', () {
+      final inner = _buildInner(
+        studyDate: '20240110',
+        seriesDate: '20240112',
+        acquisitionDate: '20240111',
+        contentDate: '20240109',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 1, 12));
+    });
+
+    test('ignores "Unknown" values', () {
+      final inner = _buildInner(
+        studyDate: 'Unknown',
+        seriesDate: 'Unknown',
+        acquisitionDate: '20240201',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 2, 1));
+    });
+
+    test('returns null when all dates are "Unknown"', () {
+      final inner = _buildInner(
+        studyDate: 'Unknown',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+
+    test('returns null when all dates are empty', () {
+      final inner = _buildInner(
+        studyDate: '',
+        seriesDate: '',
+        acquisitionDate: '',
+        contentDate: '',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+
+    test('excludes future dates', () {
+      final futureYear = (DateTime.now().year + 10).toString();
+      final inner = _buildInner(
+        studyDate: '20240101',
+        seriesDate: '${futureYear}0101',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 1, 1));
+    });
+
+    test('returns null when all dates are in the future', () {
+      final futureYear = (DateTime.now().year + 5).toString();
+      final inner = _buildInner(
+        studyDate: '${futureYear}0101',
+        seriesDate: '${futureYear}0201',
+        acquisitionDate: '${futureYear}0301',
+        contentDate: '${futureYear}0401',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+
+    test('handles DICOM date range (takes start date)', () {
+      final inner = _buildInner(
+        studyDate: '20240101-20240105',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 1, 1));
+    });
+
+    test('handles DICOM date range across months', () {
+      final inner = _buildInner(
+        studyDate: '20240328-20240402',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 3, 28));
+    });
+
+    test('ignores malformed date strings', () {
+      final inner = _buildInner(
+        studyDate: 'not-a-date',
+        seriesDate: '2024',
+        acquisitionDate: '202401',
+        contentDate: '2024011',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+
+    test('ignores mixed valid and malformed dates', () {
+      final inner = _buildInner(
+        studyDate: 'bad-date',
+        seriesDate: 'Unknown',
+        acquisitionDate: '20240615',
+        contentDate: 'also-bad',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 6, 15));
+    });
+
+    test('rejects impossible month/day', () {
+      final inner = _buildInner(
+        studyDate: '20241301', // month 13
+        seriesDate: '20240132', // day 32
+        acquisitionDate: '20240230', // Feb 30
+        contentDate: '20240001', // month 0
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+
+    test('contentDate wins when it is most recent', () {
+      final inner = _buildInner(
+        studyDate: '20240101',
+        seriesDate: '20240102',
+        acquisitionDate: '20240103',
+        contentDate: '20240104',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 1, 4));
+    });
+
+    test('mixed unknowns and valid dates picks most recent', () {
+      final inner = _buildInner(
+        studyDate: 'Unknown',
+        seriesDate: '20240301',
+        acquisitionDate: '',
+        contentDate: '20240315',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 3, 15));
+    });
+
+    test('accepts Feb 29 on leap year', () {
+      // 2024 is a leap year
+      final inner = _buildInner(
+        studyDate: '20240229',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, DateTime.utc(2024, 2, 29));
+    });
+
+    test('rejects Feb 29 on non-leap year', () {
+      // 2023 is not a leap year
+      final inner = _buildInner(
+        studyDate: '20230229',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.bestDate, isNull);
+    });
+  });
+
+  group('Tooth info', () {
+    test('toothInfo delegates to inner', () {
+      final inner = _buildInner(toothInfo: '36');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.toothInfo, '36');
+    });
+
+    test('toothInfo defaults to "Unknown"', () {
+      final inner = _buildInner();
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.toothInfo, 'Unknown');
+    });
+
+    test('toothInfo with FDI notation', () {
+      final inner = _buildInner(toothInfo: '11');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.toothInfo, '11');
+    });
+
+    test('toothInfo with region string', () {
+      final inner = _buildInner(toothInfo: 'Maxillary Right');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.toothInfo, 'Maxillary Right');
+    });
+
+    test('toothInfo empty string still present', () {
+      final inner = _buildInner(toothInfo: '');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.toothInfo, '');
     });
   });
 }

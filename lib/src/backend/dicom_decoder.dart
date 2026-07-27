@@ -49,6 +49,8 @@ class RustDecoder implements DicomDecoder {
       DicomTagId.sopInstanceUid: innerMeta.sopInstanceUid,
       DicomTagId.seriesDescription: innerMeta.seriesDescription,
       DicomTagId.bodyPartExamined: innerMeta.bodyPartExamined,
+      DicomTagId.toothNumber: innerMeta.toothInfo,
+      DicomTagId.toothRegion: innerMeta.toothInfo,
       DicomTagId.sliceThickness: innerMeta.sliceThickness.toString(),
       DicomTagId.instanceNumber: innerMeta.instanceNumber,
       DicomTagId.width: innerMeta.width.toString(),

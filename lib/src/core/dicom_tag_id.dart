@@ -1,6 +1,6 @@
 /// An immutable identifier for a DICOM data element (group, element).
 ///
-/// Used with [DicomMetadata.tag] for generic tag lookup beyond the 28
+/// Used with [DicomMetadata.tag] for generic tag lookup beyond the 32
 /// typed getters.
 ///
 /// ```dart
@@ -42,7 +42,7 @@ class DicomTagId {
   @override
   String toString() => 'DicomTagId($hex)';
 
-  // ── Predefined constants (28 common DICOM tags) ──
+  // ── Predefined constants (34 common DICOM tags) ──
 
   // Patient & Study
   /// Patient's Name (0010,0010).
@@ -53,6 +53,15 @@ class DicomTagId {
 
   /// Study Date (0008,0020).
   static const studyDate = DicomTagId.fromParts(0x0008, 0x0020);
+
+  /// Series Date (0008,0021).
+  static const seriesDate = DicomTagId.fromParts(0x0008, 0x0021);
+
+  /// Acquisition Date (0008,0022).
+  static const acquisitionDate = DicomTagId.fromParts(0x0008, 0x0022);
+
+  /// Content Date (0008,0023).
+  static const contentDate = DicomTagId.fromParts(0x0008, 0x0023);
 
   /// Study Description (0008,1030).
   static const studyDescription = DicomTagId.fromParts(0x0008, 0x1030);
@@ -86,6 +95,13 @@ class DicomTagId {
 
   /// Body Part Examined (0018,0015).
   static const bodyPartExamined = DicomTagId.fromParts(0x0018, 0x0015);
+
+  // Dental
+  /// Tooth Number (0018,6032) — ISO 3950 FDI notation.
+  static const toothNumber = DicomTagId.fromParts(0x0018, 0x6032);
+
+  /// Tooth Region (0018,6033).
+  static const toothRegion = DicomTagId.fromParts(0x0018, 0x6033);
 
   /// Slice Thickness (0018,0050).
   static const sliceThickness = DicomTagId.fromParts(0x0018, 0x0050);

@@ -1,3 +1,14 @@
+## 0.2.3
+
+- **(fix)** JPEG-compressed DICOM decoding via `dicom-pixeldata` `PixelDecoder` trait — handles Carestream and other vendors using encapsulated transfer syntaxes (JPEG lossless, JPEG-LS, JPEG 2000, RLE)
+- **(fix)** window center alignment for unsigned pixel data — DICOM window values are now offset by -32768 to match the shader's signed coordinate space, eliminating all-white/all-black images across Generic, Sirona, and Carestream files
+- **(fix)** initial window defaults to pixel data range ("Full Range") instead of DICOM header values, which are often useless (e.g. C:32768/W:65536 spanning the full 16-bit range)
+- **(fix)** window now resets on each `loadFromBytes` call; previously kept the previous file's window values
+- **(fix)** level/width slider ranges computed from actual pixel data range instead of DICOM header values, eliminating ±40K dead zones
+- **(deps)** added `dicom-pixeldata = "0.9"` to Rust dependencies for transfer-syntax-aware pixel decoding
+- **(build)** WASM rebuilt with JPEG decoder support
+- **(test)** 27 new tests: 23 integration tests against real Carestream/Generic/Sirona DICOM files validating JPEG decoding, window alignment, MONOCHROME1 detection, 12-bit-in-16-bit handling, and preset computation; 4 controller tests for auto-window and load-reset behavior
+
 ## 0.2.2
 
 - **(feat)** expanded DICOM date extraction to 4 tags: `studyDate` (0008,0020), `seriesDate` (0008,0021), `acquisitionDate` (0008,0022), `contentDate` (0008,0023)

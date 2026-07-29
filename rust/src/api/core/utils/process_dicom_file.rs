@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use dicom::core::Tag;
 use dicom::dictionary_std::tags;
 use dicom::object::{open_file, DefaultDicomObject};
+use dicom_pixeldata::PixelDecoder;
 
 /// Internal utility function for parsing a DICOM file and extracting its metadata and pixels.
 ///
@@ -101,8 +102,18 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         get_str_tag(&obj, tags::INSTANCE_NUMBER).unwrap_or_else(|| default_meta.instance_number.clone());
 
     // --- Technical & Display Metadata ---
-    let window_center = get_float_tag(&obj, tags::WINDOW_CENTER, default_meta.window_center);
-    let window_width = get_float_tag(&obj, tags::WINDOW_WIDTH, default_meta.window_width);
+    let window_center_opt = obj
+        .element(tags::WINDOW_CENTER)
+        .ok()
+        .and_then(|e| e.to_float32().ok());
+    let window_width_opt = obj
+        .element(tags::WINDOW_WIDTH)
+        .ok()
+        .and_then(|e| e.to_float32().ok());
+
+    let mut window_center = window_center_opt.unwrap_or(0.0);
+    let mut window_width = window_width_opt.unwrap_or(0.0);
+
     let rescale_intercept = get_float_tag(
         &obj,
         tags::RESCALE_INTERCEPT,
@@ -127,12 +138,21 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         default_meta.pixel_representation,
     );
 
+    // --- Align DICOM window center with our offset pixel storage ---
+    // DICOM Window Center/Width are defined in the original pixel value space.
+    // For unsigned data, our pipeline offsets raw pixel values by -32768 to
+    // fit in i16 (and the shader reverses this). The window center must be
+    // offset identically so it aligns with the shader's coordinate space.
+    if pixel_representation == 0 && window_width > 0.0 {
+        window_center -= 32768.0;
+    }
+
     // --- Pixel Spacing (try standard tag first, then Imager Pixel Spacing) ---
     let pixel_spacing = get_str_tag(&obj, tags::PIXEL_SPACING)
         .or_else(|| get_str_tag(&obj, tags::IMAGER_PIXEL_SPACING))
         .unwrap_or_default();
 
-    let metadata = DicomMetadata::new(DicomMetadata {
+    let mut metadata = DicomMetadata::new(DicomMetadata {
         patient_id,
         patient_name,
         study_date,
@@ -168,77 +188,56 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
     });
 
     // --- Pixel Data Extraction ---
+    // Uses dicom-pixeldata's PixelDecoder trait which handles ALL transfer
+    // syntaxes: uncompressed, JPEG lossless/lossy, JPEG-LS, JPEG 2000, RLE, etc.
     let mut pixel_data: Vec<i16> = Vec::new();
 
     if !config.skip_pixels {
-        if let Ok(element) = obj.element(tags::PIXEL_DATA) {
-            let raw_bytes = element
-                .to_bytes()
-                .context("Failed to get raw pixel bytes")?;
+        if let Ok(decoded) = obj.decode_pixel_data() {
+            let raw_bytes = decoded.data().to_vec();
 
             if !raw_bytes.is_empty() {
                 if bits_allocated <= 8 {
-                    // 8-bit pixel data (e.g., ultrasound, secondary captures)
-                    // Preserve sign for pixel_representation=1 (signed)
                     if pixel_representation == 1 {
                         pixel_data = raw_bytes.iter().map(|&b| b as i8 as i16).collect();
                     } else {
                         pixel_data = raw_bytes.iter().map(|&b| b as i16).collect();
                     }
-                } else {
-                    // 16-bit pixel data — fast path: direct byte-chunking
-                    if raw_bytes.len() % 2 == 0 {
-                        pixel_data = if pixel_representation == 0 {
-                            // Unsigned 16-bit (0..65535) → offset to signed range (-32768..32767)
-                            // so the Dart +32768 offset and shader -32768 offset correctly
-                            // reconstruct the original unsigned value.
-                            raw_bytes
-                                .chunks_exact(2)
-                                .map(|chunk| {
-                                    let raw = u16::from_le_bytes([chunk[0], chunk[1]]);
-                                    (raw as i32 - 32768) as i16
-                                })
-                                .collect()
-                        } else {
-                            // Signed 16-bit (-32768..32767) — native byte representation
-                            raw_bytes
-                                .chunks_exact(2)
-                                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                                .collect()
-                        };
-                    }
-
-                    // If direct chunking produced no data (unlikely but defensive),
-                    // fall back to the dicom crate's transfer-syntax-aware decoding.
-                    if pixel_data.is_empty() || pixel_data.len() != (width * height) as usize {
-                        pixel_data = element
-                            .to_multi_float64()
-                            .map(|v| v.into_iter().map(|f| f as i16).collect())
-                            .unwrap_or_else(|_| element.to_multi_int::<i16>().unwrap_or_default());
-
-                        // Final fallback: if still empty after dicom crate decoding,
-                        // retry raw bytes with pixel-representation-aware conversion
-                        if pixel_data.is_empty() && !raw_bytes.is_empty() {
-                            pixel_data = if pixel_representation == 0 {
-                                raw_bytes
-                                    .chunks_exact(2)
-                                    .map(|chunk| {
-                                        let raw = u16::from_le_bytes([chunk[0], chunk[1]]);
-                                        (raw as i32 - 32768) as i16
-                                    })
-                                    .collect()
-                            } else {
-                                raw_bytes
-                                    .chunks_exact(2)
-                                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                                    .collect()
-                            };
-                        }
-                    }
+                } else if raw_bytes.len() % 2 == 0 {
+                    pixel_data = if pixel_representation == 0 {
+                        // Unsigned 16-bit → offset to signed range for shader
+                        raw_bytes
+                            .chunks_exact(2)
+                            .map(|chunk| {
+                                let raw = u16::from_le_bytes([chunk[0], chunk[1]]);
+                                (raw as i32 - 32768) as i16
+                            })
+                            .collect()
+                    } else {
+                        raw_bytes
+                            .chunks_exact(2)
+                            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+                            .collect()
+                    };
                 }
             }
         }
     }
+
+    // If the DICOM header did not provide window center/width, compute sensible
+    // defaults from the actual pixel data range so the image is immediately visible.
+    // This prevents the "all white" problem with modalities like CR/DR that lack
+    // window tags while using hardcoded CT-brain defaults (C:40/W:400).
+    if window_width == 0.0 && !pixel_data.is_empty() {
+        if let (Some(&min), Some(&max)) = (pixel_data.iter().min(), pixel_data.iter().max()) {
+            window_width = (max as f32 - min as f32).max(1.0);
+            window_center = (min as f32 + max as f32) / 2.0;
+        }
+    }
+
+    // Reflect the (possibly auto-computed) window in the metadata.
+    metadata.window_center = window_center;
+    metadata.window_width = window_width;
 
     Ok(DicomFrameResult::new(DicomFrameResult {
         metadata,

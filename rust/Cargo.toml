@@ -9,6 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 flutter_rust_bridge = "=2.12.0"
 dicom = "0.9"
+dicom-pixeldata = "0.9"
 anyhow = "1.0.102"
 
 [lints.rust]

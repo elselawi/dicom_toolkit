@@ -558,6 +558,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dicom",
+ "dicom-pixeldata",
  "flutter_rust_bridge",
 ]
 

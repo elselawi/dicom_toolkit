@@ -790,11 +790,21 @@ class _ControlsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final meta = controller.result!.metadata;
-    final defaultCenter = meta.windowCenter;
-    final defaultWidth = meta.windowWidth;
-    final centerRange = (defaultWidth * 3).clamp(100.0, 40000.0);
-    final widthMax = (defaultWidth * 4).clamp(4.0, 65536.0);
+    // Use actual pixel data range for slider bounds — not the DICOM header
+    // values which are often useless (e.g. C:32768/W:65536 for 16-bit unsigned).
+    final presets = DicomWindowPreset.forImage(controller.result!);
+    final fullRange = presets.firstWhere(
+      (p) => p.label == 'Full Range',
+      orElse: () => presets.first,
+    );
+    final pixelMid = fullRange.center;
+    final pixelRange = fullRange.width;
+    // Level slider: cover the full pixel range ±50% margin
+    final centerRange = (pixelRange * 1.5).clamp(100.0, 65536.0);
+    final levelMin = (pixelMid - centerRange).floorToDouble();
+    final levelMax = (pixelMid + centerRange).ceilToDouble();
+    // Width slider: from 1 to 2× the pixel range
+    final widthMax = (pixelRange * 2.0).clamp(4.0, 65536.0);
 
     return ListenableBuilder(
       listenable: controller,
@@ -837,8 +847,7 @@ class _ControlsTab extends StatelessWidget {
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: DicomWindowPreset.forImage(controller.result!)
-                    .map((preset) {
+                children: presets.map((preset) {
                   final selected = controller.windowCenter == preset.center &&
                       controller.windowWidth == preset.width;
                   return ChoiceChip(
@@ -855,15 +864,15 @@ class _ControlsTab extends StatelessWidget {
 
               _LabeledSlider(
                 label: 'Level',
-                value: controller.windowCenter ?? defaultCenter,
-                min: (defaultCenter - centerRange).floorToDouble(),
-                max: (defaultCenter + centerRange).ceilToDouble(),
+                value: controller.windowCenter ?? pixelMid,
+                min: levelMin,
+                max: levelMax,
                 onChanged: (v) => controller.updateWindowing(center: v),
               ),
               const SizedBox(height: 4),
               _LabeledSlider(
                 label: 'Width',
-                value: controller.windowWidth ?? defaultWidth,
+                value: controller.windowWidth ?? pixelRange,
                 min: 1,
                 max: widthMax.ceilToDouble(),
                 onChanged: (v) => controller.updateWindowing(width: v),
@@ -880,7 +889,7 @@ class _ControlsTab extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'L/W: ${defaultCenter.toStringAsFixed(0)}/${defaultWidth.toStringAsFixed(0)}',
+                  'L/W: ${controller.windowCenter?.toStringAsFixed(0) ?? '—'}/${controller.windowWidth?.toStringAsFixed(0) ?? '—'}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),

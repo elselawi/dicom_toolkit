@@ -8,6 +8,7 @@ import '../core/constants/color_maps.dart';
 import '../core/dicom_parse_result.dart';
 import '../tools/dicom_parser.dart';
 import '../tools/dicom_renderer.dart';
+import '../tools/dicom_window_preset.dart';
 
 /// Reactive state controller for the [DicomViewer] widget.
 ///
@@ -110,8 +111,16 @@ class DicomViewerController extends ChangeNotifier {
     try {
       await ensureShader();
       _result = await _parser.parse(bytes);
-      _windowCenter ??= _result!.metadata.windowCenter;
-      _windowWidth ??= _result!.metadata.windowWidth;
+      // Auto-window to the full pixel range so the image is immediately visible
+      // regardless of modality. DICOM header window values are frequently
+      // missing or inappropriate for non-CT modalities (e.g. CR/DR X-ray).
+      final presets = DicomWindowPreset.forImage(_result!);
+      final defaultPreset = presets.firstWhere(
+        (p) => p.label == 'Full Range',
+        orElse: () => presets.first,
+      );
+      _windowCenter = defaultPreset.center;
+      _windowWidth = defaultPreset.width;
       _rawTexture = await _renderer.createTexture(_result!);
       if (_colorMap != DicomColorMap.grayscale) {
         await _buildColorLut();

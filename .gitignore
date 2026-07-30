@@ -28,6 +28,9 @@ migrate_working_dir/
 /pubspec.lock
 .dart_tool/
 .flutter-plugins-dependencies
+
+# Test DICOM data — not published
+dcms/
 /build/
 /coverage/
 test/series-00001/**

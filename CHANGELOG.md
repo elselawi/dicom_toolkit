@@ -1,3 +1,13 @@
+## 0.2.4
+
+- **(feat)** 3 new spatial positioning fields in Rust `DicomMetadata` (32→35): `imagePositionPatient` (0020,0032), `sliceLocation` (0020,1041), `spacingBetweenSlices` (0018,0088) — enables CBCT multi-slice volume reconstruction
+- **(feat)** new `DicomTagId` constants (28→31): `imagePositionPatient`, `sliceLocation`, `spacingBetweenSlices`
+- **(feat)** `DicomMetadata` typed getters: `imagePositionPatient`, `imagePositionX`/`Y`/`Z`, `sliceLocation`, `spacingBetweenSlices`
+- **(feat)** convenience getters: `pixelSpacingX`, `pixelSpacingY`, `instanceNumberInt`
+- **(refactor)** `dicom_decoder.dart` tag map updated with 3 new spatial tags
+- **(docs)** README: 32→35 extracted tags, new Spatial category; AGENTS.md: version 0.2.0→0.2.3, tag/field counts updated
+- **(test)** `dicom_tag_id_test.dart`: 28→31 constants; all existing test `DicomMetadata` constructors updated for new required fields
+
 ## 0.2.3
 
 - **(fix)** JPEG-compressed DICOM decoding via `dicom-pixeldata` `PixelDecoder` trait — handles Carestream and other vendors using encapsulated transfer syntaxes (JPEG lossless, JPEG-LS, JPEG 2000, RLE)

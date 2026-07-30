@@ -4,8 +4,6 @@ Suggestions for the next features, sorted by estimated effort.
 
 ---
 
-## Easy — hours each
-
 ### Pixel probe
 
 **What:** Hover or tap any pixel to see its Hounsfield Unit (or modality-specific value) in an overlay tooltip.
@@ -81,8 +79,6 @@ Approach (A) is preferred — one FFI call per frame change. Add a `ThumbnailSli
 
 ---
 
-## Medium — days each
-
 ### Volumetric stack navigation
 
 **What:** Load an entire DICOM series (directory of `.dcm` files), sort by spatial position, and scroll through slices with the mouse wheel or a slider.
@@ -152,8 +148,6 @@ Approach (A) is preferred — one FFI call per frame change. Add a `ThumbnailSli
 **Implementation:** The `dicom` crate already parses SR content tree. Extract measurement groups, coded concepts, and text findings. Render as a scrollable tree or table in the metadata panel. Link measurements to image annotations where possible (e.g., a "3.2 cm" measurement in the report highlights the corresponding ROI).
 
 ---
-
-## Hard — weeks each
 
 ### Full DICOM network — C-STORE SCP/SCU, C-FIND, C-MOVE
 

@@ -6,8 +6,14 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 > **Forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)** — the original Rust+DICOM FFI bridge, GPU shader, and 16-bit precision pipeline. This project extends it with a composable toolkit API, web support, measurement tools, rotation, pixel-spacing-aware rulers, and modality-agnostic windowing presets. Licensed under GPL v3 in compliance with the original.
->
+
 > **[Live example → dicomtoolkit.pages.dev](https://dicomtoolkit.pages.dev/)** — try the toolkit in your browser.
+
+> **[pub.dev → dicom_toolkit](https://pub.dev/packages/dicom_toolkit)**
+
+
+> **What's next?** See [NEXT.md](NEXT.md) for the roadmap.
+
 
 ---
 

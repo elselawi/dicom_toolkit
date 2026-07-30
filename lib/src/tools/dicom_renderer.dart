@@ -21,7 +21,6 @@ import '../core/dicom_pixel_data.dart';
 /// and [renderToImage] separately when you need to reuse the texture across
 /// many windowing settings.
 class DicomRenderer {
-
   /// Creates a renderer.
   ///
   /// [colorMap] defaults to [DicomColorMap.grayscale]. Pass a different map
@@ -36,22 +35,44 @@ class DicomRenderer {
   final bool _invert;
 
   /// Ensures the fragment shader has been compiled.
-  Future<ui.FragmentShader> get shader async {
-    _shader ??= await _compileShader();
-    return _shader!;
+  /// On web (CanvasKit), FragmentProgram is unsupported — returns null silently.
+  Future<ui.FragmentShader?> get shader async {
+    if (_shader != null) {
+      print('[DART] renderer.shader: already cached');
+      return _shader;
+    }
+    print('[DART] renderer.shader: attempting _compileShader...');
+    try {
+      _shader = await _compileShader();
+      print('[DART] renderer.shader: compiled OK');
+    } catch (e) {
+      print('[DART] renderer.shader: compile FAILED — $e');
+      _shader = null;
+    }
+    return _shader;
   }
 
   /// Compiles the GLSL windowing shader from assets.
   Future<ui.FragmentShader> _compileShader() async {
+    print(
+        '[DART] renderer._compileShader: loading asset ${LibShaders.dicomWindow}...');
     final program = await ui.FragmentProgram.fromAsset(LibShaders.dicomWindow);
-    return program.fragmentShader();
+    print('[DART] renderer._compileShader: FragmentProgram loaded');
+    final fs = program.fragmentShader();
+    print('[DART] renderer._compileShader: fragmentShader OK');
+    return fs;
   }
 
   /// Packs 16-bit DICOM pixel data into an 8-bit RGBA [ui.Image] texture.
   ///
-  /// The high byte goes into R, the low byte into G. The shader reverses this
-  /// to reconstruct full 16-bit precision.
-  Future<ui.Image> createTexture(final DicomParseResult result) async {
+  /// When [applyWindowing] is true (CPU fallback for web), applies
+  /// window-center/window-width/HU in Dart instead of the GPU shader.
+  Future<ui.Image> createTexture(
+    final DicomParseResult result, {
+    final double? windowCenter,
+    final double? windowWidth,
+    final bool applyWindowing = false,
+  }) async {
     final pixelData = result.pixelData;
     if (pixelData is! DicomInt16PixelData) {
       throw ArgumentError(
@@ -61,9 +82,54 @@ class DicomRenderer {
     final data = pixelData.buffer;
     final width = pixelData.width;
     final height = pixelData.height;
-    final rgbaData = Uint8List(width * height * 4);
+    final pixelCount = width * height;
+    final meta = result.metadata;
+    print('[DART] createTexture: applyWindowing=$applyWindowing '
+        'buffer.len=${data.length} w=$width h=$height pixelCount=$pixelCount');
 
-    for (var i = 0; i < data.length; i++) {
+    if (applyWindowing) {
+      // ── CPU fallback (web): apply windowing in pure Dart ──
+      final wc = windowCenter ?? meta.windowCenter;
+      final ww = (windowWidth ?? meta.windowWidth).clamp(1.0, 65536.0);
+      final slope = meta.rescaleSlope;
+      final intercept = meta.rescaleIntercept;
+      final low = wc - ww / 2.0;
+      print(
+          '[DART] createTexture CPU: wc=$wc ww=$ww slope=$slope intercept=$intercept');
+      final rgbaData = Uint8List(pixelCount * 4);
+      for (var i = 0; i < pixelCount && i < data.length; i++) {
+        final hu = data[i].toDouble() * slope + intercept;
+        final norm = ((hu - low) / ww).clamp(0.0, 1.0);
+        final v = (norm * 255.0).round();
+        rgbaData[i * 4 + 0] = v;
+        rgbaData[i * 4 + 1] = v;
+        rgbaData[i * 4 + 2] = v;
+        rgbaData[i * 4 + 3] = 255;
+      }
+      print(
+          '[DART] createTexture CPU: packing done, calling decodeImageFromPixels...');
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        rgbaData,
+        width,
+        height,
+        ui.PixelFormat.rgba8888,
+        (final ui.Image img) {
+          print(
+              '[DART] createTexture CPU: decodeImageFromPixels callback, img=${img.width}x${img.height}');
+          completer.complete(img);
+        },
+      );
+      print('[DART] createTexture CPU: awaiting completer...');
+      return completer.future;
+    }
+
+    // ── GPU path: pack 16-bit into R/G channels for shader ──
+    print(
+        '[DART] createTexture GPU: packing ${pixelCount} pixels into RGBA...');
+    final rgbaData = Uint8List(pixelCount * 4);
+
+    for (var i = 0; i < pixelCount && i < data.length; i++) {
       final val = data[i] + 32768; // Offset to unsigned u16 range
       rgbaData[i * 4 + 0] = (val >> 8) & 0xFF; // R = high byte
       rgbaData[i * 4 + 1] = val & 0xFF; // G = low byte
@@ -71,14 +137,21 @@ class DicomRenderer {
       rgbaData[i * 4 + 3] = 255; // A = opaque
     }
 
+    print(
+        '[DART] createTexture GPU: packing done, calling decodeImageFromPixels...');
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
       rgbaData,
       width,
       height,
       ui.PixelFormat.rgba8888,
-      (final ui.Image img) => completer.complete(img),
+      (final ui.Image img) {
+        print(
+            '[DART] createTexture GPU: decodeImageFromPixels callback, img=${img.width}x${img.height}');
+        completer.complete(img);
+      },
     );
+    print('[DART] createTexture GPU: awaiting completer...');
     return completer.future;
   }
 
@@ -100,15 +173,8 @@ class DicomRenderer {
 
   /// Renders a DICOM frame to a [ui.Image] in a single call.
   ///
-  /// This is the main entry point. It creates the texture, applies windowing
-  /// and HU scaling, and outputs the final rendered image.
-  ///
-  /// [windowCenter] and [windowWidth] override the DICOM header defaults.
-  /// If omitted, the values from [result.metadata] are used.
-  ///
-  /// [colorMap] overrides the renderer's default color map for this call.
-  /// [invert] overrides the renderer's default invert flag for this call.
-  /// [rotationSteps] rotates the output 0–3 steps of 90° clockwise.
+  /// On platforms with shader support, applies windowing + HU + color LUT on GPU.
+  /// On web (no shader), falls back to CPU windowing via [createTexture].
   Future<ui.Image> render(
     final DicomParseResult result, {
     final double? windowCenter,
@@ -117,6 +183,18 @@ class DicomRenderer {
     final bool? invert,
     final int rotationSteps = 0,
   }) async {
+    print('[DART] renderer.render: entry, awaiting shader...');
+    final s = await shader;
+    print('[DART] renderer.render: shader=${s == null ? "NULL" : "OK"}');
+    if (s == null) {
+      print('[DART] renderer.render: taking CPU fallback path');
+      return createTexture(
+        result,
+        windowCenter: windowCenter,
+        windowWidth: windowWidth,
+        applyWindowing: true,
+      );
+    }
     final texture = await createTexture(result);
     return renderToImage(
       result,
@@ -155,6 +233,15 @@ class DicomRenderer {
         : await _buildColorLutFor(effectiveColorMap);
 
     final s = await shader;
+    if (s == null) {
+      // Web fallback: CPU windowing
+      return createTexture(
+        result,
+        windowCenter: wc,
+        windowWidth: ww,
+        applyWindowing: true,
+      );
+    }
 
     // Bind uniforms (order must match shader expectations).
     final width = texture.width.toDouble();

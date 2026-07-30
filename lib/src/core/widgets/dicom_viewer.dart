@@ -63,8 +63,16 @@ class DicomViewer extends StatelessWidget {
         final result = controller.result!;
         final rot = controller.rotationSteps;
         final isRotated = rot.isOdd; // 90° or 270° swap w/h
+        final hasGpuShader = controller.shader != null;
+        final hasTexture = controller.rawTexture != null;
+        print(
+            '[DART] viewer build: hasGpuShader=$hasGpuShader hasTexture=$hasTexture '
+            'texSize=${controller.rawTexture?.width}x${controller.rawTexture?.height} '
+            'wc=${controller.windowCenter} ww=${controller.windowWidth}');
 
         // The core image widget — always present.
+        print(
+            '[DART] viewer build: using ${hasGpuShader ? "GPU CustomPaint" : "CPU RawImage"}');
         final image = Transform.rotate(
           angle: rot * 1.57079632679, // π/2 per step
           child: SizedBox(
@@ -74,18 +82,23 @@ class DicomViewer extends StatelessWidget {
             height:
                 (isRotated ? result.pixelData.width : result.pixelData.height)
                     .toDouble(),
-            child: CustomPaint(
-              painter: DicomShaderPainter(
-                result: result,
-                windowCenter: controller.windowCenter!,
-                windowWidth: controller.windowWidth!,
-                shader: controller.shader!,
-                rawTexture: controller.rawTexture!,
-                colorLutTexture: controller.colorLutTexture,
-                colorize: controller.colorMap != DicomColorMap.grayscale,
-                invert: controller.invert,
-              ),
-            ),
+            child: hasGpuShader
+                ? CustomPaint(
+                    painter: DicomShaderPainter(
+                      result: result,
+                      windowCenter: controller.windowCenter!,
+                      windowWidth: controller.windowWidth!,
+                      shader: controller.shader!,
+                      rawTexture: controller.rawTexture!,
+                      colorLutTexture: controller.colorLutTexture,
+                      colorize: controller.colorMap != DicomColorMap.grayscale,
+                      invert: controller.invert,
+                    ),
+                  )
+                : RawImage(
+                    image: controller.rawTexture,
+                    fit: BoxFit.fill,
+                  ),
           ),
         );
 

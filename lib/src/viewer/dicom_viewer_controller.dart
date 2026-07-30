@@ -93,9 +93,15 @@ class DicomViewerController extends ChangeNotifier {
   bool get hasShader => _shader != null;
 
   /// Ensures the fragment shader is compiled.
+  /// On web, this may silently fail — rendering falls back to CPU.
   Future<void> ensureShader() async {
+    print(
+        '[DART] controller.ensureShader: entry (_shader=${_shader == null ? "null" : "cached"})');
     if (_shader != null) return;
+    print('[DART] controller.ensureShader: calling _renderer.shader...');
     _shader = await _renderer.shader;
+    print(
+        '[DART] controller.ensureShader: result=${_shader != null ? "OK" : "NULL (web)"}');
     notifyListeners();
   }
 
@@ -110,7 +116,15 @@ class DicomViewerController extends ChangeNotifier {
 
     try {
       await ensureShader();
+      print(
+          '[DART] controller: ensureShader done, hasShader=${_shader != null}');
+      print('[DART] controller: parsing...');
       _result = await _parser.parse(bytes);
+      print(
+          '[DART] controller: parsed OK, result.hasPixels=${_result!.hasPixels} '
+          'result.isMonochrome=${_result!.isMonochrome} '
+          'frameCount=${_result!.frameCount}');
+      print('[DART] controller: computing presets...');
       // Auto-window to the full pixel range so the image is immediately visible
       // regardless of modality. DICOM header window values are frequently
       // missing or inappropriate for non-CT modalities (e.g. CR/DR X-ray).
@@ -121,11 +135,18 @@ class DicomViewerController extends ChangeNotifier {
       );
       _windowCenter = defaultPreset.center;
       _windowWidth = defaultPreset.width;
+      print('[DART] controller: window L=${_windowCenter} W=${_windowWidth}');
+      print(
+          '[DART] controller: creating texture (hasShader=${_shader != null})...');
       _rawTexture = await _renderer.createTexture(_result!);
+      print(
+          '[DART] controller: texture created OK, size=${_rawTexture!.width}x${_rawTexture!.height}');
       if (_colorMap != DicomColorMap.grayscale) {
         await _buildColorLut();
       }
-    } catch (e) {
+    } catch (e, st) {
+      print('[DART] controller FAILED: $e');
+      print('[DART] stack: $st');
       _errorMessage = 'Failed to load DICOM: $e';
     } finally {
       _setLoading(false);

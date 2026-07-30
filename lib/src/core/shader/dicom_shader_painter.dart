@@ -55,6 +55,9 @@ class DicomShaderPainter extends CustomPainter {
   /// Performs the actual drawing operation using the fragment shader.
   @override
   void paint(final Canvas canvas, final Size size) {
+    print(
+        '[DART] ShaderPainter.paint: size=${size.width.toInt()}x${size.height.toInt()} '
+        'wc=$windowCenter ww=$windowWidth colorize=$colorize invert=$invert');
     final meta = result.metadata;
     final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
 

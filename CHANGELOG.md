@@ -1,3 +1,25 @@
+## 0.2.5
+
+- **(feat)** 2 new extracted DICOM tags in Rust `DicomMetadata` (35→37): `imageOrientationPatient` (0020,0037), `numberOfFrames` (0028,0008)
+- **(feat)** new `DicomTagId` constants (31→39): `imageOrientationPatient`, `numberOfFrames`, plus `seriesDate`, `acquisitionDate`, `contentDate`, `toothNumber`, `toothRegion`, `imagerPixelSpacing` (existing but untested)
+- **(feat)** `DicomMetadata` typed getters: `imageOrientationPatient`, `numberOfFrames`
+- **(feat)** `DicomParseResult.frameCount` now reads from `metadata.numberOfFrames` instead of hardcoded `1`
+- **(feat)** dual-path pixel extraction: PATH 1 reads raw `PixelData` element bytes directly (fast, no decoder needed for uncompressed DICOM), PATH 2 falls back to `dicom-pixeldata` decoder for compressed transfer syntaxes
+- **(feat)** first-frame-only extraction: multi-frame datasets only process the first frame's pixel data, avoiding OOM and minutes-long decodes on large files
+- **(feat)** `convert_pixels()` helper extracted in Rust — shared by both pixel paths
+- **(feat)** example app `_MetadataTab`: new Spatial section (pixel spacing, image position, slice location, slice spacing, orientation) and Frames tile in File section
+- **(fix)** `RangeError` in `DicomRenderer.createTexture` when pixel buffer length exceeds `width × height` — loop now clamped to `min(pixelCount, data.length)`
+- **(fix)** web: `bytes.toList()` memory explosion on large files — pass `Uint8List` directly to avoid 8× JS number unboxing
+- **(fix)** web: `FragmentProgram.fromAsset()` unsupported on CanvasKit — shader compilation caught silently, falls back to CPU windowing via `RawImage`
+- **(fix)** web: `DicomViewer` null shader crash — uses `RawImage` widget when GPU shader unavailable
+- **(fix)** `_MetadataTab` missing `group('Tooth info')` header after refactor
+- **(build)** WASM max memory: 1 GB → 2 GB to support large multi-frame DICOMs
+- **(perf)** first-frame truncation avoids converting all frames to `i16` and scanning all frames for window auto-range
+- **(debug)** Rust `eprintln!` traces behind `#[cfg(debug_assertions)]` — auto-strip in release builds
+- **(debug)** extensive Dart `print()` traces through decoder, renderer, controller, viewer, and example app
+- **(docs)** `DicomTagId` count: 34→39; `DicomMetadata` getter count: 35→37; `DicomParseResult` tag count: 28→37
+- **(test)** 249 tests pass; new spatial positioning, numberOfFrames, pixel spacing parsed component, and volumetric integration tests
+
 ## 0.2.4
 
 - **(feat)** 3 new spatial positioning fields in Rust `DicomMetadata` (32→35): `imagePositionPatient` (0020,0032), `sliceLocation` (0020,1041), `spacingBetweenSlices` (0018,0088) — enables CBCT multi-slice volume reconstruction

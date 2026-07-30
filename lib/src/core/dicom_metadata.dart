@@ -3,7 +3,7 @@ import 'dicom_tag_id.dart';
 
 /// Wraps the generated [generated.DicomMetadata] with generic tag access.
 ///
-/// The 32 typed getters delegate to the underlying generated metadata.
+/// The 35 typed getters delegate to the underlying generated metadata.
 /// [tag] and [allTags] provide escape-hatch access to any DICOM tag,
 /// including fields not covered by the typed getters.
 ///
@@ -159,16 +159,13 @@ class DicomMetadata {
   String get imagePositionPatient => _inner.imagePositionPatient;
 
   /// Parsed X coordinate from [imagePositionPatient], or `null`.
-  double? get imagePositionX =>
-      _parseSpacingComponent(imagePositionPatient, 0);
+  double? get imagePositionX => _parseSpacingComponent(imagePositionPatient, 0);
 
   /// Parsed Y coordinate from [imagePositionPatient], or `null`.
-  double? get imagePositionY =>
-      _parseSpacingComponent(imagePositionPatient, 1);
+  double? get imagePositionY => _parseSpacingComponent(imagePositionPatient, 1);
 
   /// Parsed Z coordinate from [imagePositionPatient], or `null`.
-  double? get imagePositionZ =>
-      _parseSpacingComponent(imagePositionPatient, 2);
+  double? get imagePositionZ => _parseSpacingComponent(imagePositionPatient, 2);
 
   /// Relative position of the slice in mm. Tag (0020,1041).
   double get sliceLocation => _inner.sliceLocation;

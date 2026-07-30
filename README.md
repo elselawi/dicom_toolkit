@@ -30,8 +30,8 @@
 
 | Type | Description |
 |------|------------|
-| `DicomTagId` | Immutable DICOM tag (group, element) — 32 predefined constants |
-| `DicomMetadata` | 32 typed getters + generic `tag()` lookup + `bestDate` resolution |
+| `DicomTagId` | Immutable DICOM tag (group, element) — 31 predefined constants |
+| `DicomMetadata` | 35 typed getters + generic `tag()` lookup + `bestDate` resolution |
 | `DicomPixelData` | Sealed class — `DicomInt16PixelData` for 16-bit monochrome |
 | `DicomParseResult` | Parsed frame: `metadata` + `pixelData` + `frame()` + `computeRoi()` |
 | `DicomColorMap` | Enum: `grayscale`, `hotIron`, `pet`, `rainbow`, `cool`, `bone` |
@@ -215,7 +215,7 @@ DicomViewer(
 ### `DicomTagId` — tag constants for generic lookup
 
 ```dart
-// 32 predefined constants:
+// 31 predefined constants:
 DicomTagId.patientName               // (0010,0010)
 DicomTagId.modality                  // (0008,0060)
 DicomTagId.pixelSpacing              // (0028,0030)
@@ -254,7 +254,7 @@ print(result.metadata.contentDate);      // "20240315" or "Unknown"
 
 ---
 
-## 32 extracted DICOM tags
+## 35 extracted DICOM tags
 
 | Category | Tags |
 |---|---|
@@ -265,6 +265,7 @@ print(result.metadata.contentDate);      // "20240315" or "Unknown"
 | UIDs | `studyInstanceUid`, `seriesInstanceUid`, `sopInstanceUid` |
 | Acquisition | `seriesDescription`, `bodyPartExamined`, `sliceThickness`, `instanceNumber` |
 | Image | `width`, `height`, `samplesPerPixel`, `bitsAllocated`, `bitsStored`, `highBit`, `pixelRepresentation`, `photometricInterpretation`, `pixelSpacing` |
+| Spatial | `imagePositionPatient`, `sliceLocation`, `spacingBetweenSlices` |
 | Windowing | `windowCenter`, `windowWidth`, `rescaleIntercept`, `rescaleSlope` |
 
 ---

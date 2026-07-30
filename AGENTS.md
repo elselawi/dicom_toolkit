@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.0`
+- **Version**: `0.2.3`
 
 ---
 
@@ -19,7 +19,7 @@ lib/
     backend/
       dicom_decoder.dart             ← DicomDecoder (abstract) + RustDecoder (FFI impl)
     core/
-      dicom_tag_id.dart              ← DicomTagId (group, element) + 28 constants
+      dicom_tag_id.dart              ← DicomTagId (group, element) + 31 constants
       dicom_metadata.dart            ← DicomMetadata wrapper (typed getters + tag lookup)
       dicom_pixel_data.dart          ← sealed DicomPixelData + DicomInt16PixelData
       dicom_parse_result.dart        ← DicomParseResult (metadata + pixels + frame API)
@@ -57,7 +57,7 @@ rust/
       init.rs                       ← load_dicom / load_dicom_from_bytes FFI entry
       core/
         config/dicom_config.rs      ← auto_normalize, skip_pixels
-        models/dicom_metadata.rs    ← 32-field struct + Default impl
+        models/dicom_metadata.rs    ← 35-field struct + Default impl
         models/dicom_frame_result.rs← metadata + Vec<i16>
         constants/lib_constants.rs  ← DefaultConfigs consts
         utils/process_dicom_file.rs ← THE CORE: parses .dcm, extracts tags+pixels
@@ -90,7 +90,7 @@ test/
 
 1. `DicomToolkit.init()` — loads native library / WASM
 2. `DicomParser.parse(bytes)` → `DicomDecoder.decode()` → `loadDicomFromBytes()` FFI
-3. Rust `process_dicom_file.rs`: opens DICOM, extracts 32 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels
+3. Rust `process_dicom_file.rs`: opens DICOM, extracts 35 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels
 4. `DicomParseResult.fromFrame()`: wraps generated metadata → `DicomMetadata` wrapper, packs pixels → `DicomInt16PixelData`
 5. `DicomRenderer`: compiles GLSL shader, packs 16-bit → RGBA (+32768 offset), renders via `PictureRecorder` → `ui.Image`
 6. `DicomViewer`: `CustomPaint` → `DicomShaderPainter` → shader (windowing + HU + color LUT), wrapped in `Transform.rotate`

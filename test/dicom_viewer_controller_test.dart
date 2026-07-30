@@ -232,8 +232,8 @@ void main() {
     Int16List _dental12BitPixels(final int count) {
       final pixels = Int16List(count);
       for (var i = 0; i < count; i++) {
-        final raw = (i % 4096);
-        pixels[i] = (raw - 32768) as int;
+        final raw = i % 4096;
+        pixels[i] = raw - 32768;
       }
       return pixels;
     }
@@ -241,8 +241,8 @@ void main() {
     Int16List _full16BitPixels(final int count) {
       final pixels = Int16List(count);
       for (var i = 0; i < count; i++) {
-        final raw = (i % 65536);
-        pixels[i] = (raw - 32768) as int;
+        final raw = i % 65536;
+        pixels[i] = raw - 32768;
       }
       return pixels;
     }

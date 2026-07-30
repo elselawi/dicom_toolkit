@@ -27,8 +27,7 @@ class RustDecoder implements DicomDecoder {
     final Uint8List bytes, {
     final DicomConfig? config,
   }) async {
-    print(
-        '[DART] decode START: inputBytes=${bytes.length} isUint8List=${bytes is Uint8List}');
+    print('[DART] decode START: inputBytes=${bytes.length}');
     final finalConfig = config ?? await DicomConfig.default_();
     print('[DART] decode: calling FFI loadDicomFromBytes...');
 

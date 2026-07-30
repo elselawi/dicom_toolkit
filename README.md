@@ -254,7 +254,7 @@ print(result.metadata.contentDate);      // "20240315" or "Unknown"
 
 ---
 
-## 35 extracted DICOM tags
+## 37 extracted DICOM tags
 
 | Category | Tags |
 |---|---|
@@ -265,8 +265,17 @@ print(result.metadata.contentDate);      // "20240315" or "Unknown"
 | UIDs | `studyInstanceUid`, `seriesInstanceUid`, `sopInstanceUid` |
 | Acquisition | `seriesDescription`, `bodyPartExamined`, `sliceThickness`, `instanceNumber` |
 | Image | `width`, `height`, `samplesPerPixel`, `bitsAllocated`, `bitsStored`, `highBit`, `pixelRepresentation`, `photometricInterpretation`, `pixelSpacing` |
-| Spatial | `imagePositionPatient`, `sliceLocation`, `spacingBetweenSlices` |
+| Spatial | `imagePositionPatient`, `imageOrientationPatient`, `sliceLocation`, `spacingBetweenSlices` |
+| Volume | `numberOfFrames` |
 | Windowing | `windowCenter`, `windowWidth`, `rescaleIntercept`, `rescaleSlope` |
+
+### Computed properties
+
+| Property | Returns | Logic |
+|---|---|---|
+| `isMultiFrame` | `bool` | `numberOfFrames > 1` |
+| `hasSpatialInfo` | `bool` | `imagePositionPatient` non-empty AND (`spacingBetweenSlices > 0` OR `sliceThickness > 0`) |
+| `isVolumetric` | `bool` | `isMultiFrame OR hasSpatialInfo` — true for multi-frame cine/MFSC, enhanced CT/MR, or single slices with 3D placement |
 
 ---
 
@@ -311,6 +320,10 @@ The `serve_debug.py` script injects the required **cross-origin isolation header
 - `Cross-Origin-Embedder-Policy: require-corp`
 
 Without these, `SharedArrayBuffer` is disabled by the browser and the WASM worker pool crashes with `DataCloneError`.
+
+> **Web performance note:** The SSE bridge copies every `List<int>` argument from JS→WASM. For large multi-frame DICOMs (150+ MB), this adds seconds of latency and ~2 GB peak RAM. On native platforms, DCO passes a pointer with zero copy. flutter_rust_bridge 2.12 does not auto-select DCO on web even when `crossOriginIsolated: true` — see the [upstream issue tracker](https://github.com/fzyzcjy/flutter_rust_bridge/issues). As a mitigation, the Rust decoder only extracts the first frame's pixel data (raw-byte fast path for uncompressed DICOM, decoder fallback for compressed).
+
+> **Shader fallback:** `FragmentProgram.fromAsset()` is unsupported on CanvasKit (web). The renderer catches the compile failure and applies windowing in pure Dart, displaying the result via `RawImage` instead of the GPU shader.
 
 ### VS Code launch config
 

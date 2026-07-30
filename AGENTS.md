@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.3`
+- **Version**: `0.2.5`
 
 ---
 
@@ -19,7 +19,7 @@ lib/
     backend/
       dicom_decoder.dart             ← DicomDecoder (abstract) + RustDecoder (FFI impl)
     core/
-      dicom_tag_id.dart              ← DicomTagId (group, element) + 31 constants
+      dicom_tag_id.dart              ← DicomTagId (group, element) + 39 constants
       dicom_metadata.dart            ← DicomMetadata wrapper (typed getters + tag lookup)
       dicom_pixel_data.dart          ← sealed DicomPixelData + DicomInt16PixelData
       dicom_parse_result.dart        ← DicomParseResult (metadata + pixels + frame API)
@@ -57,7 +57,7 @@ rust/
       init.rs                       ← load_dicom / load_dicom_from_bytes FFI entry
       core/
         config/dicom_config.rs      ← auto_normalize, skip_pixels
-        models/dicom_metadata.rs    ← 35-field struct + Default impl
+        models/dicom_metadata.rs    ← 37-field struct + Default impl
         models/dicom_frame_result.rs← metadata + Vec<i16>
         constants/lib_constants.rs  ← DefaultConfigs consts
         utils/process_dicom_file.rs ← THE CORE: parses .dcm, extracts tags+pixels
@@ -90,7 +90,7 @@ test/
 
 1. `DicomToolkit.init()` — loads native library / WASM
 2. `DicomParser.parse(bytes)` → `DicomDecoder.decode()` → `loadDicomFromBytes()` FFI
-3. Rust `process_dicom_file.rs`: opens DICOM, extracts 35 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels
+3. Rust `process_dicom_file.rs`: opens DICOM, extracts 37 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels (first frame only via dual-path: raw bytes for uncompressed, decoder for compressed)
 4. `DicomParseResult.fromFrame()`: wraps generated metadata → `DicomMetadata` wrapper, packs pixels → `DicomInt16PixelData`
 5. `DicomRenderer`: compiles GLSL shader, packs 16-bit → RGBA (+32768 offset), renders via `PictureRecorder` → `ui.Image`
 6. `DicomViewer`: `CustomPaint` → `DicomShaderPainter` → shader (windowing + HU + color LUT), wrapped in `Transform.rotate`
@@ -187,3 +187,5 @@ dart analyze lib
 3. **Stale DLL** — after codegen, both `cargo build` (debug) and `cargo build --release` must run
 4. **Shader asset path** — use `LibShaders.dicomWindow` constant, not a raw string
 5. **SSE vs DCO codec** — `flutter test` uses DCO (VM FFI), `flutter run` uses SSE (serialized). Both need matching DLLs
+6. **SSE large-data bottleneck** — on web, SSE copies every `List<int>` arg JS→WASM (150+ MB = seconds + ~2 GB RAM). DCO (zero-copy) is available when `crossOriginIsolated: true` but flutter_rust_bridge 2.12 codegen doesn't emit it — see [upstream issue]
+7. **Web shader fallback** — `FragmentProgram.fromAsset()` unsupported on CanvasKit; renderer catches compile failure and falls back to CPU windowing via `RawImage`

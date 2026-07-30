@@ -373,6 +373,10 @@ class _ToolkitScreenState extends State<ToolkitScreen> {
         _currentFileName?.split(RegExp(r'[/\\]')).last ?? 'Unknown';
     final meta = _controller.result!.metadata;
     final imageSize = Size(meta.width.toDouble(), meta.height.toDouble());
+    print(
+        '[EXAMPLE] _buildViewer: hasData=${_controller.hasData} hasError=${_controller.hasError} '
+        'isLoading=${_controller.isLoading} rawTexture=${_controller.rawTexture != null} '
+        'shader=${_controller.shader != null}');
 
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth > 600;
@@ -1209,6 +1213,9 @@ class _MetadataTab extends StatelessWidget {
                 label: 'Resolution', value: '${meta.width} × ${meta.height}'),
             _MetaTile(
                 label: 'Photometric', value: meta.photometricInterpretation),
+            _MetaTile(
+                label: 'Frames',
+                value: '${controller.result?.frameCount ?? 1}'),
           ]),
           const SizedBox(height: 16),
           _SectionHeader(title: 'Patient'),
@@ -1257,6 +1264,38 @@ class _MetadataTab extends StatelessWidget {
                     : 'N/A'),
             _MetaTile(label: 'Tooth', value: meta.toothInfo),
             _MetaTile(label: 'Samples/px', value: '${meta.samplesPerPixel}'),
+          ]),
+          const SizedBox(height: 16),
+          _SectionHeader(title: 'Spatial'),
+          const SizedBox(height: 6),
+          _MetaGrid(children: [
+            _MetaTile(
+                label: 'Pixel spacing',
+                value: meta.pixelSpacingX != null && meta.pixelSpacingY != null
+                    ? '${meta.pixelSpacingX!.toStringAsFixed(4)} × '
+                        '${meta.pixelSpacingY!.toStringAsFixed(4)} mm'
+                    : meta.pixelSpacing ?? 'N/A'),
+            _MetaTile(
+                label: 'Image position',
+                value: meta.imagePositionPatient.isNotEmpty
+                    ? meta.imagePositionPatient
+                    : 'N/A'),
+            _MetaTile(
+                label: 'Slice location',
+                value: meta.sliceLocation != 0
+                    ? '${meta.sliceLocation.toStringAsFixed(2)} mm'
+                    : 'N/A'),
+            _MetaTile(
+                label: 'Slice spacing',
+                value: meta.spacingBetweenSlices > 0
+                    ? '${meta.spacingBetweenSlices.toStringAsFixed(2)} mm'
+                    : 'N/A'),
+            _MetaTile(
+                label: 'Orientation',
+                value: meta.imageOrientationPatient.isNotEmpty
+                    ? meta.imageOrientationPatient
+                    : 'N/A',
+                mono: true),
           ]),
           const SizedBox(height: 16),
           _SectionHeader(title: 'Technical'),

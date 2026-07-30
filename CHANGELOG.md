@@ -7,7 +7,8 @@
 - **(feat)** dual-path pixel extraction: PATH 1 reads raw `PixelData` element bytes directly (fast, no decoder needed for uncompressed DICOM), PATH 2 falls back to `dicom-pixeldata` decoder for compressed transfer syntaxes
 - **(feat)** first-frame-only extraction: multi-frame datasets only process the first frame's pixel data, avoiding OOM and minutes-long decodes on large files
 - **(feat)** `convert_pixels()` helper extracted in Rust — shared by both pixel paths
-- **(feat)** example app `_MetadataTab`: new Spatial section (pixel spacing, image position, slice location, slice spacing, orientation) and Frames tile in File section
+- **(feat)** `DicomMetadata` computed properties: `isMultiFrame` (`numberOfFrames > 1`), `hasSpatialInfo` (`imagePositionPatient` non-empty + slice spacing/thickness), `isVolumetric` (`isMultiFrame || hasSpatialInfo`)
+- **(feat)** example app `_MetadataTab`: volumetric indicator tile, new Spatial section (pixel spacing, image position, slice location, slice spacing, orientation), and Frames tile in File section
 - **(fix)** `RangeError` in `DicomRenderer.createTexture` when pixel buffer length exceeds `width × height` — loop now clamped to `min(pixelCount, data.length)`
 - **(fix)** web: `bytes.toList()` memory explosion on large files — pass `Uint8List` directly to avoid 8× JS number unboxing
 - **(fix)** web: `FragmentProgram.fromAsset()` unsupported on CanvasKit — shader compilation caught silently, falls back to CPU windowing via `RawImage`
@@ -18,7 +19,7 @@
 - **(debug)** Rust `eprintln!` traces behind `#[cfg(debug_assertions)]` — auto-strip in release builds
 - **(debug)** extensive Dart `print()` traces through decoder, renderer, controller, viewer, and example app
 - **(docs)** `DicomTagId` count: 34→39; `DicomMetadata` getter count: 35→37; `DicomParseResult` tag count: 28→37
-- **(test)** 249 tests pass; new spatial positioning, numberOfFrames, pixel spacing parsed component, and volumetric integration tests
+- **(test)** 259 tests pass; new computed property, spatial positioning, numberOfFrames, pixel spacing parsed component, and volumetric integration tests
 
 ## 0.2.4
 

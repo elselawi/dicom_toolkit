@@ -24,6 +24,12 @@ generated.DicomMetadata _buildInner({
   final String acquisitionDate = 'Unknown',
   final String contentDate = 'Unknown',
   final String toothInfo = 'Unknown',
+  final String imagePositionPatient = '',
+  final String imageOrientationPatient = '',
+  final double sliceLocation = 0.0,
+  final double spacingBetweenSlices = 0.0,
+  final int numberOfFrames = 1,
+  final String pixelSpacing = '',
 }) =>
     generated.DicomMetadata(
       patientId: patientId,
@@ -57,10 +63,12 @@ generated.DicomMetadata _buildInner({
       bitsStored: bitsStored,
       highBit: bitsStored - 1,
       pixelRepresentation: pixelRepresentation,
-      pixelSpacing: '',
-      imagePositionPatient: '',
-      sliceLocation: 0.0,
-      spacingBetweenSlices: 0.0,
+      pixelSpacing: pixelSpacing,
+      imagePositionPatient: imagePositionPatient,
+      imageOrientationPatient: imageOrientationPatient,
+      sliceLocation: sliceLocation,
+      spacingBetweenSlices: spacingBetweenSlices,
+      numberOfFrames: numberOfFrames,
     );
 
 void main() {
@@ -397,6 +405,134 @@ void main() {
       );
       final meta = DicomMetadata(inner: inner);
       expect(meta.bestDate, isNull);
+    });
+  });
+
+  group('Spatial positioning', () {
+    test('imagePositionPatient delegates to inner', () {
+      final inner = _buildInner(imagePositionPatient: '1.0\\2.0\\3.0');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.imagePositionPatient, '1.0\\2.0\\3.0');
+    });
+
+    test('imagePositionPatient defaults to empty string', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.imagePositionPatient, '');
+    });
+
+    test('imagePositionX/Y/Z parse correctly', () {
+      final inner = _buildInner(imagePositionPatient: '10.5\\-20.3\\100.0');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.imagePositionX, 10.5);
+      expect(meta.imagePositionY, -20.3);
+      expect(meta.imagePositionZ, 100.0);
+    });
+
+    test('imagePositionX/Y/Z return null for empty string', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.imagePositionX, isNull);
+      expect(meta.imagePositionY, isNull);
+      expect(meta.imagePositionZ, isNull);
+    });
+
+    test('imagePositionX/Y/Z return null for incomplete components', () {
+      final inner = _buildInner(imagePositionPatient: '1.0');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.imagePositionX, 1.0);
+      expect(meta.imagePositionY, isNull);
+      expect(meta.imagePositionZ, isNull);
+    });
+
+    test('imageOrientationPatient delegates to inner', () {
+      final inner = _buildInner(
+        imageOrientationPatient: '1\\0\\0\\0\\1\\0',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.imageOrientationPatient, '1\\0\\0\\0\\1\\0');
+    });
+
+    test('imageOrientationPatient defaults to empty string', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.imageOrientationPatient, '');
+    });
+
+    test('sliceLocation delegates to inner', () {
+      final inner = _buildInner(sliceLocation: -42.5);
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.sliceLocation, -42.5);
+    });
+
+    test('sliceLocation defaults to 0.0', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.sliceLocation, 0.0);
+    });
+
+    test('spacingBetweenSlices delegates to inner', () {
+      final inner = _buildInner(spacingBetweenSlices: 2.5);
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.spacingBetweenSlices, 2.5);
+    });
+
+    test('spacingBetweenSlices defaults to 0.0', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.spacingBetweenSlices, 0.0);
+    });
+  });
+
+  group('NumberOfFrames', () {
+    test('numberOfFrames delegates to inner', () {
+      final inner = _buildInner(numberOfFrames: 42);
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.numberOfFrames, 42);
+    });
+
+    test('numberOfFrames defaults to 1', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.numberOfFrames, 1);
+    });
+
+    test('numberOfFrames handles zero (malformed but legal)', () {
+      final inner = _buildInner(numberOfFrames: 0);
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.numberOfFrames, 0);
+    });
+  });
+
+  group('Pixel spacing parsed components', () {
+    test('pixelSpacingX/Y parse correctly', () {
+      final inner = _buildInner(pixelSpacing: '0.25\\0.5');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.pixelSpacingX, 0.25);
+      expect(meta.pixelSpacingY, 0.5);
+    });
+
+    test('pixelSpacingX/Y return null for empty string', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.pixelSpacingX, isNull);
+      expect(meta.pixelSpacingY, isNull);
+    });
+
+    test('pixelSpacingX/Y handle single component', () {
+      final inner = _buildInner(pixelSpacing: '0.3');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.pixelSpacingX, 0.3);
+      expect(meta.pixelSpacingY, isNull);
+    });
+
+    test('pixelSpacingX reads from tag map fallback', () {
+      final tags = {DicomTagId.pixelSpacing: '0.75\\0.75'};
+      final meta = DicomMetadata(inner: _buildInner(), tags: tags);
+      expect(meta.pixelSpacing, '0.75\\0.75');
+      expect(meta.pixelSpacingX, 0.75);
+      expect(meta.pixelSpacingY, 0.75);
+    });
+
+    test('pixelSpacingX reads from imagerPixelSpacing fallback', () {
+      final tags = {DicomTagId.imagerPixelSpacing: '0.1\\0.1'};
+      final meta = DicomMetadata(inner: _buildInner(), tags: tags);
+      expect(meta.pixelSpacing, '0.1\\0.1');
+      expect(meta.pixelSpacingX, 0.1);
+      expect(meta.pixelSpacingY, 0.1);
     });
   });
 

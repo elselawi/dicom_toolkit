@@ -153,6 +153,65 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────
+  // GROUP 4.5 — Spatial & volumetric metadata
+  // ──────────────────────────────────────────────────────────
+  group('Spatial & volumetric metadata', () {
+    late DicomParser parser;
+
+    setUp(() {
+      parser = const DicomParser();
+    });
+
+    test('numberOfFrames defaults to 1 for single-frame DICOM', () async {
+      final result = await parser.parse(_bytesOf('test/test-1.dcm'));
+      expect(result.metadata.numberOfFrames, 1);
+      expect(result.frameCount, 1);
+    });
+
+    test('sliceThickness is extracted when present', () async {
+      final result = await parser.parse(_bytesOf('test/test-1.dcm'));
+      // sliceThickness may or may not be present; verify it's a valid number
+      expect(result.metadata.sliceThickness, isA<double>());
+    });
+
+    test('spatial fields are present (may be empty/default)', () async {
+      final result = await parser.parse(_bytesOf('test/test-1.dcm'));
+      // These fields are always present — they default to empty/zero.
+      expect(result.metadata.imagePositionPatient, isA<String>());
+      expect(result.metadata.imageOrientationPatient, isA<String>());
+      expect(result.metadata.sliceLocation, isA<double>());
+      expect(result.metadata.spacingBetweenSlices, isA<double>());
+    });
+
+    test('all 9 vendor files have valid numberOfFrames', () async {
+      final files = [
+        for (var i = 1; i <= 3; i++) 'dcms/carestream ($i).dcm',
+        for (var i = 1; i <= 4; i++) 'dcms/generic ($i).dcm',
+        for (var i = 1; i <= 2; i++) 'dcms/sirona ($i).dcm',
+      ];
+      for (final path in files) {
+        final result = await parser.parse(_bytesOf(path));
+        expect(result.metadata.numberOfFrames, greaterThanOrEqualTo(1),
+            reason: '$path numberOfFrames must be ≥ 1');
+        expect(result.frameCount, result.metadata.numberOfFrames,
+            reason: '$path frameCount must match numberOfFrames');
+      }
+    });
+
+    test('pixelSpacing parsed components for Generic files', () async {
+      final result = await parser.parse(_bytesOf('dcms/generic (1).dcm'));
+      // Generic files may have pixel spacing — validate it's parseable if present
+      final ps = result.metadata.pixelSpacing;
+      if (ps != null && ps.isNotEmpty) {
+        expect(result.metadata.pixelSpacingX, isNotNull,
+            reason: 'pixelSpacingX should parse from "$ps"');
+        expect(result.metadata.pixelSpacingY, isNotNull,
+            reason: 'pixelSpacingY should parse from "$ps"');
+      }
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────
   // GROUP 5 — Vendor file validation (Carestream, Generic, Sirona)
   //
   // These tests validate the fixes for:

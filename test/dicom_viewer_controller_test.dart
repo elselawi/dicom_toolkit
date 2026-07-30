@@ -57,6 +57,8 @@ DicomParseResult _buildResult({
     imagePositionPatient: '',
     sliceLocation: 0.0,
     spacingBetweenSlices: 0.0,
+    imageOrientationPatient: '',
+    numberOfFrames: 1,
   );
   final frame = DicomFrameResult(
     metadata: inner,
@@ -288,6 +290,8 @@ void main() {
         imagePositionPatient: '',
         sliceLocation: 0.0,
         spacingBetweenSlices: 0.0,
+        imageOrientationPatient: '',
+        numberOfFrames: 1,
       );
       final frame = DicomFrameResult(
         metadata: inner,

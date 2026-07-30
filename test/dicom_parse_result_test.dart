@@ -55,6 +55,8 @@ generated.DicomMetadata _buildInner({
       imagePositionPatient: '',
       sliceLocation: 0.0,
       spacingBetweenSlices: 0.0,
+      imageOrientationPatient: '',
+      numberOfFrames: 1,
     );
 
 DicomParseResult _buildResult({
@@ -136,9 +138,60 @@ void main() {
   });
 
   group('DicomParseResult properties', () {
-    test('frameCount is always 1', () {
+    test('frameCount reads from metadata numberOfFrames (default 1)', () {
       final result = _buildResult();
       expect(result.frameCount, 1);
+      expect(result.metadata.numberOfFrames, 1);
+    });
+
+    test('frameCount reflects multi-frame datasets', () {
+      final inner = generated.DicomMetadata(
+        patientId: 'P001',
+        patientName: 'Test',
+        studyDate: '20240101',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+        studyDescription: 'Study',
+        modality: 'CT',
+        manufacturer: 'Mfr',
+        manufacturerModelName: 'Model',
+        institutionName: 'Hosp',
+        studyInstanceUid: '1.2.3',
+        seriesInstanceUid: '1.2.3.1',
+        sopInstanceUid: '1.2.3.1.1',
+        seriesDescription: 'Series',
+        bodyPartExamined: 'CHEST',
+        toothInfo: 'Unknown',
+        sliceThickness: 1.0,
+        instanceNumber: '1',
+        photometricInterpretation: 'MONOCHROME2',
+        width: 256,
+        height: 256,
+        windowCenter: 40.0,
+        windowWidth: 400.0,
+        rescaleIntercept: 0.0,
+        rescaleSlope: 1.0,
+        samplesPerPixel: 1,
+        bitsAllocated: 16,
+        bitsStored: 16,
+        highBit: 15,
+        pixelRepresentation: 0,
+        pixelSpacing: '',
+        imagePositionPatient: '',
+        imageOrientationPatient: '',
+        sliceLocation: 0.0,
+        spacingBetweenSlices: 0.0,
+        numberOfFrames: 120,
+      );
+      final frame = DicomFrameResult(
+        metadata: inner,
+        pixelData: Int16List(256 * 256),
+      );
+      final result = DicomParseResult.fromFrame(frame: frame);
+
+      expect(result.frameCount, 120);
+      expect(result.metadata.numberOfFrames, 120);
     });
 
     test('hasPixels returns true when pixel data present', () {

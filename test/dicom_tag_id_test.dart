@@ -111,22 +111,33 @@ void main() {
   });
 
   group('DicomTagId predefined constants', () {
-    test('28 constants exist and have correct groups', () {
+    test('39 constants exist and have correct groups', () {
+      // Patient & Study
       expect(DicomTagId.patientName.group, 0x0010);
       expect(DicomTagId.patientId.group, 0x0010);
       expect(DicomTagId.studyDate.group, 0x0008);
+      expect(DicomTagId.seriesDate.group, 0x0008);
+      expect(DicomTagId.acquisitionDate.group, 0x0008);
+      expect(DicomTagId.contentDate.group, 0x0008);
       expect(DicomTagId.studyDescription.group, 0x0008);
+      // Equipment
       expect(DicomTagId.modality.group, 0x0008);
       expect(DicomTagId.manufacturer.group, 0x0008);
       expect(DicomTagId.manufacturerModelName.group, 0x0008);
       expect(DicomTagId.institutionName.group, 0x0008);
+      // UIDs
       expect(DicomTagId.studyInstanceUid.group, 0x0020);
       expect(DicomTagId.seriesInstanceUid.group, 0x0020);
       expect(DicomTagId.sopInstanceUid.group, 0x0008);
+      // Acquisition
       expect(DicomTagId.seriesDescription.group, 0x0008);
       expect(DicomTagId.bodyPartExamined.group, 0x0018);
+      // Dental
+      expect(DicomTagId.toothNumber.group, 0x0018);
+      expect(DicomTagId.toothRegion.group, 0x0018);
       expect(DicomTagId.sliceThickness.group, 0x0018);
       expect(DicomTagId.instanceNumber.group, 0x0020);
+      // Image
       expect(DicomTagId.width.group, 0x0028);
       expect(DicomTagId.height.group, 0x0028);
       expect(DicomTagId.samplesPerPixel.group, 0x0028);
@@ -136,29 +147,48 @@ void main() {
       expect(DicomTagId.pixelRepresentation.group, 0x0028);
       expect(DicomTagId.photometricInterpretation.group, 0x0028);
       expect(DicomTagId.pixelSpacing.group, 0x0028);
+      expect(DicomTagId.imagerPixelSpacing.group, 0x0018);
+      // Spatial
+      expect(DicomTagId.imagePositionPatient.group, 0x0020);
+      expect(DicomTagId.imageOrientationPatient.group, 0x0020);
+      expect(DicomTagId.sliceLocation.group, 0x0020);
+      expect(DicomTagId.spacingBetweenSlices.group, 0x0018);
+      expect(DicomTagId.numberOfFrames.group, 0x0028);
+      // Windowing
       expect(DicomTagId.windowCenter.group, 0x0028);
       expect(DicomTagId.windowWidth.group, 0x0028);
       expect(DicomTagId.rescaleIntercept.group, 0x0028);
       expect(DicomTagId.rescaleSlope.group, 0x0028);
     });
 
-    test('all 28 constants are distinct', () {
+    test('all 39 constants are distinct', () {
       const all = <DicomTagId>[
+        // Patient & Study
         DicomTagId.patientName,
         DicomTagId.patientId,
         DicomTagId.studyDate,
+        DicomTagId.seriesDate,
+        DicomTagId.acquisitionDate,
+        DicomTagId.contentDate,
         DicomTagId.studyDescription,
+        // Equipment
         DicomTagId.modality,
         DicomTagId.manufacturer,
         DicomTagId.manufacturerModelName,
         DicomTagId.institutionName,
+        // UIDs
         DicomTagId.studyInstanceUid,
         DicomTagId.seriesInstanceUid,
         DicomTagId.sopInstanceUid,
+        // Acquisition
         DicomTagId.seriesDescription,
         DicomTagId.bodyPartExamined,
+        // Dental
+        DicomTagId.toothNumber,
+        DicomTagId.toothRegion,
         DicomTagId.sliceThickness,
         DicomTagId.instanceNumber,
+        // Image
         DicomTagId.width,
         DicomTagId.height,
         DicomTagId.samplesPerPixel,
@@ -168,13 +198,21 @@ void main() {
         DicomTagId.pixelRepresentation,
         DicomTagId.photometricInterpretation,
         DicomTagId.pixelSpacing,
+        DicomTagId.imagerPixelSpacing,
+        // Spatial
+        DicomTagId.imagePositionPatient,
+        DicomTagId.imageOrientationPatient,
+        DicomTagId.sliceLocation,
+        DicomTagId.spacingBetweenSlices,
+        DicomTagId.numberOfFrames,
+        // Windowing
         DicomTagId.windowCenter,
         DicomTagId.windowWidth,
         DicomTagId.rescaleIntercept,
         DicomTagId.rescaleSlope,
       ];
       final set = all.toSet();
-      expect(set.length, 28);
+      expect(set.length, 39);
     });
   });
 }

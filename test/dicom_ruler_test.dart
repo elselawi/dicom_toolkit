@@ -41,6 +41,8 @@ DicomMetadata _buildMeta({final String? pixelSpacing}) {
     imagePositionPatient: '',
     sliceLocation: 0.0,
     spacingBetweenSlices: 0.0,
+    imageOrientationPatient: '',
+    numberOfFrames: 1,
   );
   final tags = pixelSpacing != null
       ? {DicomTagId.pixelSpacing: pixelSpacing}

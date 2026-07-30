@@ -58,6 +58,9 @@ generated.DicomMetadata _buildInner({
       highBit: bitsStored - 1,
       pixelRepresentation: pixelRepresentation,
       pixelSpacing: '',
+      imagePositionPatient: '',
+      sliceLocation: 0.0,
+      spacingBetweenSlices: 0.0,
     );
 
 void main() {

@@ -88,6 +88,14 @@ pub struct DicomMetadata {
     /// Physical pixel spacing in mm as "row\\column" (e.g. "0.5\\0.5"). Tag (0028,0030).
     /// Falls back to Imager Pixel Spacing (0018,1164) if Pixel Spacing is absent.
     pub pixel_spacing: String,
+
+    // -- Spatial Positioning (for multi-slice / CBCT volumes) --
+    /// The x, y, z coordinates of the top-left pixel in mm. Tag (0020,0032).
+    pub image_position_patient: String,
+    /// Relative position of the slice in mm. Tag (0020,1041).
+    pub slice_location: f32,
+    /// Center-to-center spacing between adjacent slices in mm. Tag (0018,0088).
+    pub spacing_between_slices: f32,
 }
 
 impl DicomMetadata {
@@ -127,6 +135,9 @@ impl DicomMetadata {
             high_bit: data.high_bit,
             pixel_representation: data.pixel_representation,
             pixel_spacing: data.pixel_spacing,
+            image_position_patient: data.image_position_patient,
+            slice_location: data.slice_location,
+            spacing_between_slices: data.spacing_between_slices,
         };
     }
 }
@@ -167,6 +178,9 @@ impl Default for DicomMetadata {
             high_bit: 15,
             pixel_representation: 0,
             pixel_spacing: String::new(),
+            image_position_patient: String::new(),
+            slice_location: 0.0,
+            spacing_between_slices: 0.0,
         };
     }
 }

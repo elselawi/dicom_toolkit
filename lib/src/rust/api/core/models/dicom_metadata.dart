@@ -47,6 +47,9 @@ class DicomMetadata {
     required this.highBit,
     required this.pixelRepresentation,
     required this.pixelSpacing,
+    required this.imagePositionPatient,
+    required this.sliceLocation,
+    required this.spacingBetweenSlices,
   });
 
   /// The hospital-assigned patient identifier (e.g., MRN). Tag (0010,0020).
@@ -149,6 +152,15 @@ class DicomMetadata {
   /// Falls back to Imager Pixel Spacing (0018,1164) if Pixel Spacing is absent.
   final String pixelSpacing;
 
+  /// The x, y, z coordinates of the top-left pixel in mm. Tag (0020,0032).
+  final String imagePositionPatient;
+
+  /// Relative position of the slice in mm. Tag (0020,1041).
+  final double sliceLocation;
+
+  /// Center-to-center spacing between adjacent slices in mm. Tag (0018,0088).
+  final double spacingBetweenSlices;
+
   /// Provides sensible default values for DICOM metadata.
   /// These defaults are used when specific tags are missing from the file header.
   static Future<DicomMetadata> default_() => RustLib.instance.api
@@ -195,7 +207,10 @@ class DicomMetadata {
       bitsStored.hashCode ^
       highBit.hashCode ^
       pixelRepresentation.hashCode ^
-      pixelSpacing.hashCode;
+      pixelSpacing.hashCode ^
+      imagePositionPatient.hashCode ^
+      sliceLocation.hashCode ^
+      spacingBetweenSlices.hashCode;
 
   @override
   bool operator ==(final Object other) =>
@@ -233,5 +248,8 @@ class DicomMetadata {
           bitsStored == other.bitsStored &&
           highBit == other.highBit &&
           pixelRepresentation == other.pixelRepresentation &&
-          pixelSpacing == other.pixelSpacing;
+          pixelSpacing == other.pixelSpacing &&
+          imagePositionPatient == other.imagePositionPatient &&
+          sliceLocation == other.sliceLocation &&
+          spacingBetweenSlices == other.spacingBetweenSlices;
 }

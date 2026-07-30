@@ -152,6 +152,13 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         .or_else(|| get_str_tag(&obj, tags::IMAGER_PIXEL_SPACING))
         .unwrap_or_default();
 
+    // --- Spatial Positioning (multi-slice / CBCT) ---
+    let image_position_patient = get_str_tag(&obj, tags::IMAGE_POSITION_PATIENT)
+        .unwrap_or_default();
+    let slice_location = get_float_tag(&obj, tags::SLICE_LOCATION, 0.0);
+    let spacing_between_slices =
+        get_float_tag(&obj, tags::SPACING_BETWEEN_SLICES, 0.0);
+
     let mut metadata = DicomMetadata::new(DicomMetadata {
         patient_id,
         patient_name,
@@ -185,6 +192,9 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         high_bit,
         pixel_representation,
         pixel_spacing,
+        image_position_patient,
+        slice_location,
+        spacing_between_slices,
     });
 
     // --- Pixel Data Extraction ---

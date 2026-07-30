@@ -61,6 +61,10 @@ class RustDecoder implements DicomDecoder {
       DicomTagId.highBit: innerMeta.highBit.toString(),
       DicomTagId.pixelRepresentation: innerMeta.pixelRepresentation.toString(),
       DicomTagId.pixelSpacing: innerMeta.pixelSpacing,
+      DicomTagId.imagePositionPatient: innerMeta.imagePositionPatient,
+      DicomTagId.sliceLocation: innerMeta.sliceLocation.toString(),
+      DicomTagId.spacingBetweenSlices:
+          innerMeta.spacingBetweenSlices.toString(),
       DicomTagId.photometricInterpretation: innerMeta.photometricInterpretation,
       DicomTagId.windowCenter: innerMeta.windowCenter.toString(),
       DicomTagId.windowWidth: innerMeta.windowWidth.toString(),

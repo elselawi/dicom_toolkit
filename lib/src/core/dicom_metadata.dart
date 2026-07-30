@@ -140,6 +140,52 @@ class DicomMetadata {
         _tags[DicomTagId.imagerPixelSpacing];
   }
 
+  /// Parsed pixel spacing X (column) in mm, from [pixelSpacing].
+  /// Returns `null` if [pixelSpacing] is absent or unparseable.
+  double? get pixelSpacingX => _parseSpacingComponent(pixelSpacing, 0);
+
+  /// Parsed pixel spacing Y (row) in mm, from [pixelSpacing].
+  /// Returns `null` if [pixelSpacing] is absent or unparseable.
+  double? get pixelSpacingY => _parseSpacingComponent(pixelSpacing, 1);
+
+  /// Instance number as an integer, parsed from [instanceNumber].
+  /// Returns `null` if unparseable.
+  int? get instanceNumberInt => int.tryParse(instanceNumber);
+
+  // ── Spatial positioning (multi-slice / CBCT volumes) ──
+
+  /// The x, y, z coordinates of the top-left pixel in mm.
+  /// DICOM format: "x\\y\\z". Tag (0020,0032).
+  String get imagePositionPatient => _inner.imagePositionPatient;
+
+  /// Parsed X coordinate from [imagePositionPatient], or `null`.
+  double? get imagePositionX =>
+      _parseSpacingComponent(imagePositionPatient, 0);
+
+  /// Parsed Y coordinate from [imagePositionPatient], or `null`.
+  double? get imagePositionY =>
+      _parseSpacingComponent(imagePositionPatient, 1);
+
+  /// Parsed Z coordinate from [imagePositionPatient], or `null`.
+  double? get imagePositionZ =>
+      _parseSpacingComponent(imagePositionPatient, 2);
+
+  /// Relative position of the slice in mm. Tag (0020,1041).
+  double get sliceLocation => _inner.sliceLocation;
+
+  /// Center-to-center spacing between adjacent slices in mm.
+  /// Tag (0018,0088).
+  double get spacingBetweenSlices => _inner.spacingBetweenSlices;
+
+  /// Parses a DICOM backslash-separated string (e.g. "0.5\\0.5\\1.0")
+  /// and returns the component at [index], or `null`.
+  static double? _parseSpacingComponent(final String? raw, final int index) {
+    if (raw == null || raw.isEmpty) return null;
+    final parts = raw.split('\\');
+    if (index >= parts.length) return null;
+    return double.tryParse(parts[index]);
+  }
+
   // ── Date resolution ──
 
   /// Returns the most recent valid date among the four DICOM date tags:

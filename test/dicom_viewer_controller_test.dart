@@ -54,6 +54,9 @@ DicomParseResult _buildResult({
     highBit: 15,
     pixelRepresentation: pixelRepresentation,
     pixelSpacing: '',
+    imagePositionPatient: '',
+    sliceLocation: 0.0,
+    spacingBetweenSlices: 0.0,
   );
   final frame = DicomFrameResult(
     metadata: inner,
@@ -282,6 +285,9 @@ void main() {
         highBit: 15,
         pixelRepresentation: pixelRepresentation,
         pixelSpacing: '',
+        imagePositionPatient: '',
+        sliceLocation: 0.0,
+        spacingBetweenSlices: 0.0,
       );
       final frame = DicomFrameResult(
         metadata: inner,

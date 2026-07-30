@@ -424,8 +424,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DicomMetadata dco_decode_dicom_metadata(final dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 32)
-      throw Exception('unexpected arr length: expect 32 but see ${arr.length}');
+    if (arr.length != 35)
+      throw Exception('unexpected arr length: expect 35 but see ${arr.length}');
     return DicomMetadata(
       patientId: dco_decode_String(arr[0]),
       patientName: dco_decode_String(arr[1]),
@@ -459,6 +459,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       highBit: dco_decode_u_16(arr[29]),
       pixelRepresentation: dco_decode_u_16(arr[30]),
       pixelSpacing: dco_decode_String(arr[31]),
+      imagePositionPatient: dco_decode_String(arr[32]),
+      sliceLocation: dco_decode_f_32(arr[33]),
+      spacingBetweenSlices: dco_decode_f_32(arr[34]),
     );
   }
 
@@ -611,6 +614,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     final var_highBit = sse_decode_u_16(deserializer);
     final var_pixelRepresentation = sse_decode_u_16(deserializer);
     final var_pixelSpacing = sse_decode_String(deserializer);
+    final var_imagePositionPatient = sse_decode_String(deserializer);
+    final var_sliceLocation = sse_decode_f_32(deserializer);
+    final var_spacingBetweenSlices = sse_decode_f_32(deserializer);
     return DicomMetadata(
         patientId: var_patientId,
         patientName: var_patientName,
@@ -643,7 +649,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         bitsStored: var_bitsStored,
         highBit: var_highBit,
         pixelRepresentation: var_pixelRepresentation,
-        pixelSpacing: var_pixelSpacing);
+        pixelSpacing: var_pixelSpacing,
+        imagePositionPatient: var_imagePositionPatient,
+        sliceLocation: var_sliceLocation,
+        spacingBetweenSlices: var_spacingBetweenSlices);
   }
 
   @protected
@@ -802,6 +811,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_16(self.highBit, serializer);
     sse_encode_u_16(self.pixelRepresentation, serializer);
     sse_encode_String(self.pixelSpacing, serializer);
+    sse_encode_String(self.imagePositionPatient, serializer);
+    sse_encode_f_32(self.sliceLocation, serializer);
+    sse_encode_f_32(self.spacingBetweenSlices, serializer);
   }
 
   @protected

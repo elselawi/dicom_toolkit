@@ -141,6 +141,18 @@ class DicomTagId {
   /// commonly found in CR/DX (computed/digital radiography) X-ray files.
   static const imagerPixelSpacing = DicomTagId.fromParts(0x0018, 0x1164);
 
+  // Spatial Positioning (multi-slice / CBCT)
+  /// Image Position Patient (0020,0032) — x, y, z coordinates of the
+  /// top-left pixel in mm.
+  static const imagePositionPatient = DicomTagId.fromParts(0x0020, 0x0032);
+
+  /// Slice Location (0020,1041) — relative position of the slice in mm.
+  static const sliceLocation = DicomTagId.fromParts(0x0020, 0x1041);
+
+  /// Spacing Between Slices (0018,0088) — center-to-center distance
+  /// between adjacent slices in mm.
+  static const spacingBetweenSlices = DicomTagId.fromParts(0x0018, 0x0088);
+
   // Windowing
   /// Window Center (0028,1050).
   static const windowCenter = DicomTagId.fromParts(0x0028, 0x1050);

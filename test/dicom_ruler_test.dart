@@ -38,6 +38,9 @@ DicomMetadata _buildMeta({final String? pixelSpacing}) {
     highBit: 15,
     pixelRepresentation: 1,
     pixelSpacing: '',
+    imagePositionPatient: '',
+    sliceLocation: 0.0,
+    spacingBetweenSlices: 0.0,
   );
   final tags = pixelSpacing != null
       ? {DicomTagId.pixelSpacing: pixelSpacing}

@@ -472,6 +472,9 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_highBit = <u16>::sse_decode(deserializer);
         let mut var_pixelRepresentation = <u16>::sse_decode(deserializer);
         let mut var_pixelSpacing = <String>::sse_decode(deserializer);
+        let mut var_imagePositionPatient = <String>::sse_decode(deserializer);
+        let mut var_sliceLocation = <f32>::sse_decode(deserializer);
+        let mut var_spacingBetweenSlices = <f32>::sse_decode(deserializer);
         return crate::api::core::models::dicom_metadata::DicomMetadata {
             patient_id: var_patientId,
             patient_name: var_patientName,
@@ -505,6 +508,9 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
             high_bit: var_highBit,
             pixel_representation: var_pixelRepresentation,
             pixel_spacing: var_pixelSpacing,
+            image_position_patient: var_imagePositionPatient,
+            slice_location: var_sliceLocation,
+            spacing_between_slices: var_spacingBetweenSlices,
         };
     }
 }
@@ -728,6 +734,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata:
             self.high_bit.into_into_dart().into_dart(),
             self.pixel_representation.into_into_dart().into_dart(),
             self.pixel_spacing.into_into_dart().into_dart(),
+            self.image_position_patient.into_into_dart().into_dart(),
+            self.slice_location.into_into_dart().into_dart(),
+            self.spacing_between_slices.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -819,6 +828,9 @@ impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
         <u16>::sse_encode(self.high_bit, serializer);
         <u16>::sse_encode(self.pixel_representation, serializer);
         <String>::sse_encode(self.pixel_spacing, serializer);
+        <String>::sse_encode(self.image_position_patient, serializer);
+        <f32>::sse_encode(self.slice_location, serializer);
+        <f32>::sse_encode(self.spacing_between_slices, serializer);
     }
 }
 

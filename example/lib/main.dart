@@ -1216,6 +1216,12 @@ class _MetadataTab extends StatelessWidget {
             _MetaTile(
                 label: 'Frames',
                 value: '${controller.result?.frameCount ?? 1}'),
+            _MetaTile(
+              label: 'Volumetric',
+              value: meta.isVolumetric
+                  ? (meta.isMultiFrame ? '✓ (multi-frame)' : '✓ (spatial)')
+                  : 'No',
+            ),
           ]),
           const SizedBox(height: 16),
           _SectionHeader(title: 'Patient'),

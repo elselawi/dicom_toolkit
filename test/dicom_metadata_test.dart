@@ -629,23 +629,25 @@ void main() {
       expect(meta.isVolumetric, isTrue);
     });
 
-    test('isVolumetric false for multi-frame without spatial info', () {
+    test('isVolumetric true for multi-frame even without spatial info', () {
       final inner = _buildInner(
         numberOfFrames: 200,
         imagePositionPatient: '',
       );
       final meta = DicomMetadata(inner: inner);
-      expect(meta.isVolumetric, isFalse);
+      expect(meta.isVolumetric, isTrue);
+      expect(meta.isMultiFrame, isTrue);
+      expect(meta.hasSpatialInfo, isFalse);
     });
 
-    test('isVolumetric false for single-frame with spatial info', () {
+    test('isVolumetric true for single-frame with spatial info', () {
       final inner = _buildInner(
         numberOfFrames: 1,
         imagePositionPatient: '1\\2\\3',
         spacingBetweenSlices: 1.0,
       );
       final meta = DicomMetadata(inner: inner);
-      expect(meta.isVolumetric, isFalse);
+      expect(meta.isVolumetric, isTrue);
     });
 
     test('isVolumetric false for plain 2D radiograph', () {

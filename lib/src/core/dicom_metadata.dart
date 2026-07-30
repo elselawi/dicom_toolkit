@@ -196,16 +196,15 @@ class DicomMetadata {
       imagePositionPatient.isNotEmpty &&
       (spacingBetweenSlices > 0 || sliceThickness > 0);
 
-  /// True if this is a volumetric dataset: multi-frame AND spatially located.
+  /// True if this is a volumetric dataset: multi-frame OR spatially located.
   ///
   /// Volumetric datasets are typically enhanced CT/MR or multi-frame
   /// secondary capture (MFSC) with image position, orientation, and
   /// slice spacing metadata suitable for 3D reconstruction.
   ///
   /// A single-frame file with spatial metadata (e.g. one slice of a
-  /// conventional CT series) is NOT considered volumetric — use
-  /// [hasSpatialInfo] to check for individual slices with 3D placement.
-  bool get isVolumetric => isMultiFrame && hasSpatialInfo;
+  /// conventional CT series) is considered volumetric.
+  bool get isVolumetric => isMultiFrame || hasSpatialInfo;
 
   /// Parses a DICOM backslash-separated string (e.g. "0.5\\0.5\\1.0")
   /// and returns the component at [index], or `null`.

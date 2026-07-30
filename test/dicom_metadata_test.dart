@@ -24,6 +24,7 @@ generated.DicomMetadata _buildInner({
   final String acquisitionDate = 'Unknown',
   final String contentDate = 'Unknown',
   final String toothInfo = 'Unknown',
+  final double sliceThickness = 1.0,
   final String imagePositionPatient = '',
   final String imageOrientationPatient = '',
   final double sliceLocation = 0.0,
@@ -49,7 +50,7 @@ generated.DicomMetadata _buildInner({
       seriesDescription: 'Test Series',
       bodyPartExamined: 'CHEST',
       toothInfo: toothInfo,
-      sliceThickness: 1.0,
+      sliceThickness: sliceThickness,
       instanceNumber: '1',
       photometricInterpretation: photometricInterpretation,
       width: width,
@@ -565,6 +566,93 @@ void main() {
       final inner = _buildInner(toothInfo: '');
       final meta = DicomMetadata(inner: inner);
       expect(meta.toothInfo, '');
+    });
+  });
+
+  group('Computed properties', () {
+    test('isMultiFrame true when numberOfFrames > 1', () {
+      final inner = _buildInner(numberOfFrames: 120);
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.isMultiFrame, isTrue);
+    });
+
+    test('isMultiFrame false when numberOfFrames == 1', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.isMultiFrame, isFalse);
+    });
+
+    test('hasSpatialInfo true when position and spacing present', () {
+      final inner = _buildInner(
+        imagePositionPatient: '1\\2\\3',
+        spacingBetweenSlices: 1.0,
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.hasSpatialInfo, isTrue);
+    });
+
+    test('hasSpatialInfo true when position and sliceThickness present', () {
+      final inner = _buildInner(
+        imagePositionPatient: '1\\2\\3',
+        sliceThickness: 2.0,
+        spacingBetweenSlices: 0.0,
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.hasSpatialInfo, isTrue);
+    });
+
+    test('hasSpatialInfo false without image position', () {
+      final inner = _buildInner(
+        spacingBetweenSlices: 1.0,
+        imagePositionPatient: '',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.hasSpatialInfo, isFalse);
+    });
+
+    test('hasSpatialInfo false without spacing or thickness', () {
+      final inner = _buildInner(
+        imagePositionPatient: '1\\2\\3',
+        spacingBetweenSlices: 0.0,
+        sliceThickness: 0.0,
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.hasSpatialInfo, isFalse);
+    });
+
+    test('isVolumetric true for multi-frame with spatial info', () {
+      final inner = _buildInner(
+        numberOfFrames: 200,
+        imagePositionPatient: '0\\0\\-100',
+        spacingBetweenSlices: 0.5,
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.isVolumetric, isTrue);
+    });
+
+    test('isVolumetric false for multi-frame without spatial info', () {
+      final inner = _buildInner(
+        numberOfFrames: 200,
+        imagePositionPatient: '',
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.isVolumetric, isFalse);
+    });
+
+    test('isVolumetric false for single-frame with spatial info', () {
+      final inner = _buildInner(
+        numberOfFrames: 1,
+        imagePositionPatient: '1\\2\\3',
+        spacingBetweenSlices: 1.0,
+      );
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.isVolumetric, isFalse);
+    });
+
+    test('isVolumetric false for plain 2D radiograph', () {
+      final meta = DicomMetadata(inner: _buildInner());
+      expect(meta.isMultiFrame, isFalse);
+      expect(meta.hasSpatialInfo, isFalse);
+      expect(meta.isVolumetric, isFalse);
     });
   });
 }

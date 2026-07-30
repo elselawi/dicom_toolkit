@@ -10,7 +10,7 @@ import '../config/dicom_config.dart';
 import '../models/dicom_frame_result.dart';
 import '../models/dicom_metadata.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_float_tag`, `get_int_tag`, `get_str_tag`, `process_dicom_object`
+// These functions are ignored because they are not marked as `pub`: `convert_pixels`, `get_float_tag`, `get_int_tag`, `get_str_tag`, `process_dicom_object`
 
 /// Internal utility function for parsing a DICOM file and extracting its metadata and pixels.
 ///

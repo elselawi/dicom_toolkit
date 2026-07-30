@@ -48,8 +48,10 @@ class DicomMetadata {
     required this.pixelRepresentation,
     required this.pixelSpacing,
     required this.imagePositionPatient,
+    required this.imageOrientationPatient,
     required this.sliceLocation,
     required this.spacingBetweenSlices,
+    required this.numberOfFrames,
   });
 
   /// The hospital-assigned patient identifier (e.g., MRN). Tag (0010,0020).
@@ -155,11 +157,19 @@ class DicomMetadata {
   /// The x, y, z coordinates of the top-left pixel in mm. Tag (0020,0032).
   final String imagePositionPatient;
 
+  /// Direction cosines of the first row and column. Tag (0020,0037).
+  /// DICOM format: "x1\\y1\\z1\\x2\\y2\\z2".
+  final String imageOrientationPatient;
+
   /// Relative position of the slice in mm. Tag (0020,1041).
   final double sliceLocation;
 
   /// Center-to-center spacing between adjacent slices in mm. Tag (0018,0088).
   final double spacingBetweenSlices;
+
+  /// Number of frames in a multi-frame image. Tag (0028,0008).
+  /// Typically 1 for single-frame; >1 for cine/MFSC/volumetric.
+  final int numberOfFrames;
 
   /// Provides sensible default values for DICOM metadata.
   /// These defaults are used when specific tags are missing from the file header.
@@ -209,8 +219,10 @@ class DicomMetadata {
       pixelRepresentation.hashCode ^
       pixelSpacing.hashCode ^
       imagePositionPatient.hashCode ^
+      imageOrientationPatient.hashCode ^
       sliceLocation.hashCode ^
-      spacingBetweenSlices.hashCode;
+      spacingBetweenSlices.hashCode ^
+      numberOfFrames.hashCode;
 
   @override
   bool operator ==(final Object other) =>
@@ -250,6 +262,8 @@ class DicomMetadata {
           pixelRepresentation == other.pixelRepresentation &&
           pixelSpacing == other.pixelSpacing &&
           imagePositionPatient == other.imagePositionPatient &&
+          imageOrientationPatient == other.imageOrientationPatient &&
           sliceLocation == other.sliceLocation &&
-          spacingBetweenSlices == other.spacingBetweenSlices;
+          spacingBetweenSlices == other.spacingBetweenSlices &&
+          numberOfFrames == other.numberOfFrames;
 }

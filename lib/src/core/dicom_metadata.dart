@@ -3,7 +3,7 @@ import 'dicom_tag_id.dart';
 
 /// Wraps the generated [generated.DicomMetadata] with generic tag access.
 ///
-/// The 35 typed getters delegate to the underlying generated metadata.
+/// The 37 typed getters delegate to the underlying generated metadata.
 /// [tag] and [allTags] provide escape-hatch access to any DICOM tag,
 /// including fields not covered by the typed getters.
 ///
@@ -167,12 +167,20 @@ class DicomMetadata {
   /// Parsed Z coordinate from [imagePositionPatient], or `null`.
   double? get imagePositionZ => _parseSpacingComponent(imagePositionPatient, 2);
 
+  /// Direction cosines of the first row and first column of the image.
+  /// DICOM format: "x1\\y1\\z1\\x2\\y2\\z2". Tag (0020,0037).
+  String get imageOrientationPatient => _inner.imageOrientationPatient;
+
   /// Relative position of the slice in mm. Tag (0020,1041).
   double get sliceLocation => _inner.sliceLocation;
 
   /// Center-to-center spacing between adjacent slices in mm.
   /// Tag (0018,0088).
   double get spacingBetweenSlices => _inner.spacingBetweenSlices;
+
+  /// Number of frames in a multi-frame image. Tag (0028,0008).
+  /// 1 = single-frame; >1 = cine / multi-frame secondary capture / volumetric.
+  int get numberOfFrames => _inner.numberOfFrames;
 
   /// Parses a DICOM backslash-separated string (e.g. "0.5\\0.5\\1.0")
   /// and returns the component at [index], or `null`.

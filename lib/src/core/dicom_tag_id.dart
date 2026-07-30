@@ -42,7 +42,7 @@ class DicomTagId {
   @override
   String toString() => 'DicomTagId($hex)';
 
-  // ── Predefined constants (34 common DICOM tags) ──
+  // ── Predefined constants (39 common DICOM tags) ──
 
   // Patient & Study
   /// Patient's Name (0010,0010).
@@ -152,6 +152,14 @@ class DicomTagId {
   /// Spacing Between Slices (0018,0088) — center-to-center distance
   /// between adjacent slices in mm.
   static const spacingBetweenSlices = DicomTagId.fromParts(0x0018, 0x0088);
+
+  /// Image Orientation Patient (0020,0037) — direction cosines of the
+  /// first row and first column.
+  static const imageOrientationPatient = DicomTagId.fromParts(0x0020, 0x0037);
+
+  /// Number of Frames (0028,0008) — number of frames in a multi-frame
+  /// image; 1 for single-frame.
+  static const numberOfFrames = DicomTagId.fromParts(0x0028, 0x0008);
 
   // Windowing
   /// Window Center (0028,1050).

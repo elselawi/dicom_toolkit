@@ -27,11 +27,18 @@ class RustDecoder implements DicomDecoder {
     final Uint8List bytes, {
     final DicomConfig? config,
   }) async {
+    print(
+        '[DART] decode START: inputBytes=${bytes.length} isUint8List=${bytes is Uint8List}');
     final finalConfig = config ?? await DicomConfig.default_();
+    print('[DART] decode: calling FFI loadDicomFromBytes...');
+
     final frameResult = await loadDicomFromBytes(
-      bytes: bytes.toList(),
+      bytes: bytes, // Uint8List directly — avoids toList() explosion on web
       config: finalConfig,
     );
+    print(
+        '[DART] decode: FFI call returned OK, pixelData.length=${frameResult.pixelData.length} '
+        'metadata.width=${frameResult.metadata.width} metadata.height=${frameResult.metadata.height}');
 
     // Build a tag map from the typed getters on the generated metadata.
     final innerMeta = frameResult.metadata;
@@ -62,9 +69,11 @@ class RustDecoder implements DicomDecoder {
       DicomTagId.pixelRepresentation: innerMeta.pixelRepresentation.toString(),
       DicomTagId.pixelSpacing: innerMeta.pixelSpacing,
       DicomTagId.imagePositionPatient: innerMeta.imagePositionPatient,
+      DicomTagId.imageOrientationPatient: innerMeta.imageOrientationPatient,
       DicomTagId.sliceLocation: innerMeta.sliceLocation.toString(),
       DicomTagId.spacingBetweenSlices:
           innerMeta.spacingBetweenSlices.toString(),
+      DicomTagId.numberOfFrames: innerMeta.numberOfFrames.toString(),
       DicomTagId.photometricInterpretation: innerMeta.photometricInterpretation,
       DicomTagId.windowCenter: innerMeta.windowCenter.toString(),
       DicomTagId.windowWidth: innerMeta.windowWidth.toString(),
@@ -72,6 +81,11 @@ class RustDecoder implements DicomDecoder {
       DicomTagId.rescaleSlope: innerMeta.rescaleSlope.toString(),
     };
 
-    return DicomParseResult.fromFrame(frame: frameResult, tags: tags);
+    final result = DicomParseResult.fromFrame(frame: frameResult, tags: tags);
+    print(
+        '[DART] decoder: width=${result.metadata.width} height=${result.metadata.height} '
+        'pixelsInBuffer=${result.pixelData.length} frameCount=${result.frameCount} '
+        'modality=${result.metadata.modality}');
+    return result;
   }
 }

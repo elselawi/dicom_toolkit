@@ -424,8 +424,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DicomMetadata dco_decode_dicom_metadata(final dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 35)
-      throw Exception('unexpected arr length: expect 35 but see ${arr.length}');
+    if (arr.length != 37)
+      throw Exception('unexpected arr length: expect 37 but see ${arr.length}');
     return DicomMetadata(
       patientId: dco_decode_String(arr[0]),
       patientName: dco_decode_String(arr[1]),
@@ -460,8 +460,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       pixelRepresentation: dco_decode_u_16(arr[30]),
       pixelSpacing: dco_decode_String(arr[31]),
       imagePositionPatient: dco_decode_String(arr[32]),
-      sliceLocation: dco_decode_f_32(arr[33]),
-      spacingBetweenSlices: dco_decode_f_32(arr[34]),
+      imageOrientationPatient: dco_decode_String(arr[33]),
+      sliceLocation: dco_decode_f_32(arr[34]),
+      spacingBetweenSlices: dco_decode_f_32(arr[35]),
+      numberOfFrames: dco_decode_u_32(arr[36]),
     );
   }
 
@@ -615,8 +617,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     final var_pixelRepresentation = sse_decode_u_16(deserializer);
     final var_pixelSpacing = sse_decode_String(deserializer);
     final var_imagePositionPatient = sse_decode_String(deserializer);
+    final var_imageOrientationPatient = sse_decode_String(deserializer);
     final var_sliceLocation = sse_decode_f_32(deserializer);
     final var_spacingBetweenSlices = sse_decode_f_32(deserializer);
+    final var_numberOfFrames = sse_decode_u_32(deserializer);
     return DicomMetadata(
         patientId: var_patientId,
         patientName: var_patientName,
@@ -651,8 +655,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         pixelRepresentation: var_pixelRepresentation,
         pixelSpacing: var_pixelSpacing,
         imagePositionPatient: var_imagePositionPatient,
+        imageOrientationPatient: var_imageOrientationPatient,
         sliceLocation: var_sliceLocation,
-        spacingBetweenSlices: var_spacingBetweenSlices);
+        spacingBetweenSlices: var_spacingBetweenSlices,
+        numberOfFrames: var_numberOfFrames);
   }
 
   @protected
@@ -812,8 +818,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_16(self.pixelRepresentation, serializer);
     sse_encode_String(self.pixelSpacing, serializer);
     sse_encode_String(self.imagePositionPatient, serializer);
+    sse_encode_String(self.imageOrientationPatient, serializer);
     sse_encode_f_32(self.sliceLocation, serializer);
     sse_encode_f_32(self.spacingBetweenSlices, serializer);
+    sse_encode_u_32(self.numberOfFrames, serializer);
   }
 
   @protected

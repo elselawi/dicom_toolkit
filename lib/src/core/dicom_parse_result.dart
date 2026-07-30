@@ -6,15 +6,14 @@ import 'dicom_tag_id.dart';
 
 /// The result of parsing a single DICOM file.
 ///
-/// Provides access to [metadata] (all 28 typed getters + generic tag lookup)
+/// Provides access to [metadata] (all 37 typed getters + generic tag lookup)
 /// and [pixelData] (a sealed [DicomPixelData] subtype). Multi-frame datasets
-/// are represented via [frameCount] and [frame], though the initial release
-/// only produces single-frame results.
+/// are represented via [frameCount] and [frame].
 class DicomParseResult {
   const DicomParseResult._({
     required this.metadata,
     required this.pixelData,
-  }) : frameCount = 1;
+  });
 
   /// Creates from the generated [DicomFrameResult].
   factory DicomParseResult.fromFrame({
@@ -46,14 +45,15 @@ class DicomParseResult {
     );
   }
 
-  /// All 28 extracted DICOM tags + generic lookup.
+  /// All 37 extracted DICOM tags + generic lookup.
   final DicomMetadata metadata;
 
   /// The typed pixel buffer.
   final DicomPixelData pixelData;
 
-  /// Number of frames in the dataset. Always 1 in the initial release.
-  final int frameCount;
+  /// Number of frames in the dataset, from DICOM tag NumberOfFrames (0028,0008).
+  /// Defaults to 1 for single-frame datasets.
+  int get frameCount => metadata.numberOfFrames;
 
   /// Returns the frame at [index]. In the initial release, always returns
   /// `this` (single-frame datasets only).

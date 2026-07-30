@@ -92,10 +92,16 @@ pub struct DicomMetadata {
     // -- Spatial Positioning (for multi-slice / CBCT volumes) --
     /// The x, y, z coordinates of the top-left pixel in mm. Tag (0020,0032).
     pub image_position_patient: String,
+    /// Direction cosines of the first row and column. Tag (0020,0037).
+    /// DICOM format: "x1\\y1\\z1\\x2\\y2\\z2".
+    pub image_orientation_patient: String,
     /// Relative position of the slice in mm. Tag (0020,1041).
     pub slice_location: f32,
     /// Center-to-center spacing between adjacent slices in mm. Tag (0018,0088).
     pub spacing_between_slices: f32,
+    /// Number of frames in a multi-frame image. Tag (0028,0008).
+    /// Typically 1 for single-frame; >1 for cine/MFSC/volumetric.
+    pub number_of_frames: u32,
 }
 
 impl DicomMetadata {
@@ -136,8 +142,10 @@ impl DicomMetadata {
             pixel_representation: data.pixel_representation,
             pixel_spacing: data.pixel_spacing,
             image_position_patient: data.image_position_patient,
+            image_orientation_patient: data.image_orientation_patient,
             slice_location: data.slice_location,
             spacing_between_slices: data.spacing_between_slices,
+            number_of_frames: data.number_of_frames,
         };
     }
 }
@@ -179,8 +187,10 @@ impl Default for DicomMetadata {
             pixel_representation: 0,
             pixel_spacing: String::new(),
             image_position_patient: String::new(),
+            image_orientation_patient: String::new(),
             slice_location: 0.0,
             spacing_between_slices: 0.0,
+            number_of_frames: 1,
         };
     }
 }

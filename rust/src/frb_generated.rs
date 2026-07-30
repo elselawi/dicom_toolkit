@@ -473,8 +473,10 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
         let mut var_pixelRepresentation = <u16>::sse_decode(deserializer);
         let mut var_pixelSpacing = <String>::sse_decode(deserializer);
         let mut var_imagePositionPatient = <String>::sse_decode(deserializer);
+        let mut var_imageOrientationPatient = <String>::sse_decode(deserializer);
         let mut var_sliceLocation = <f32>::sse_decode(deserializer);
         let mut var_spacingBetweenSlices = <f32>::sse_decode(deserializer);
+        let mut var_numberOfFrames = <u32>::sse_decode(deserializer);
         return crate::api::core::models::dicom_metadata::DicomMetadata {
             patient_id: var_patientId,
             patient_name: var_patientName,
@@ -509,8 +511,10 @@ impl SseDecode for crate::api::core::models::dicom_metadata::DicomMetadata {
             pixel_representation: var_pixelRepresentation,
             pixel_spacing: var_pixelSpacing,
             image_position_patient: var_imagePositionPatient,
+            image_orientation_patient: var_imageOrientationPatient,
             slice_location: var_sliceLocation,
             spacing_between_slices: var_spacingBetweenSlices,
+            number_of_frames: var_numberOfFrames,
         };
     }
 }
@@ -735,8 +739,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::core::models::dicom_metadata:
             self.pixel_representation.into_into_dart().into_dart(),
             self.pixel_spacing.into_into_dart().into_dart(),
             self.image_position_patient.into_into_dart().into_dart(),
+            self.image_orientation_patient.into_into_dart().into_dart(),
             self.slice_location.into_into_dart().into_dart(),
             self.spacing_between_slices.into_into_dart().into_dart(),
+            self.number_of_frames.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -829,8 +835,10 @@ impl SseEncode for crate::api::core::models::dicom_metadata::DicomMetadata {
         <u16>::sse_encode(self.pixel_representation, serializer);
         <String>::sse_encode(self.pixel_spacing, serializer);
         <String>::sse_encode(self.image_position_patient, serializer);
+        <String>::sse_encode(self.image_orientation_patient, serializer);
         <f32>::sse_encode(self.slice_location, serializer);
         <f32>::sse_encode(self.spacing_between_slices, serializer);
+        <u32>::sse_encode(self.number_of_frames, serializer);
     }
 }
 

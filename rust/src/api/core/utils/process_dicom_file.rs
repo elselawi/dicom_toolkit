@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use dicom::core::Tag;
 use dicom::dictionary_std::tags;
 use dicom::object::{open_file, DefaultDicomObject};
+use dicom::core::value::Value as DicomValue;
 use dicom_pixeldata::PixelDecoder;
 
 /// Internal utility function for parsing a DICOM file and extracting its metadata and pixels.
@@ -28,17 +29,25 @@ pub fn process_dicom_file(path: &str, config: &DicomConfig) -> Result<DicomFrame
 }
 
 pub fn process_dicom_from_bytes(bytes: &[u8], config: &DicomConfig) -> Result<DicomFrameResult> {
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] process_dicom_from_bytes ENTRY: bytes.len={}", bytes.len());
     let cursor = std::io::Cursor::new(bytes);
     let obj = dicom::object::from_reader(cursor).context("Failed to read DICOM from bytes")?;
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] process_dicom_from_bytes: from_reader OK");
     process_dicom_object(obj, config)
 }
 
 fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result<DicomFrameResult> {
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] process_dicom_object START, skip_pixels={}", config.skip_pixels);
     let default_meta = DicomMetadata::default();
 
     // --- Mandatory Dimensions ---
     let width = obj.element(tags::COLUMNS)?.to_int::<u32>()?;
     let height = obj.element(tags::ROWS)?.to_int::<u32>()?;
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] dimensions: {}x{}", width, height);
 
     // --- Patient & Study Demographics ---
     let patient_id =
@@ -155,10 +164,16 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
     // --- Spatial Positioning (multi-slice / CBCT) ---
     let image_position_patient = get_str_tag(&obj, tags::IMAGE_POSITION_PATIENT)
         .unwrap_or_default();
+    let image_orientation_patient = get_str_tag(&obj, tags::IMAGE_ORIENTATION_PATIENT)
+        .unwrap_or_default();
     let slice_location = get_float_tag(&obj, tags::SLICE_LOCATION, 0.0);
     let spacing_between_slices =
         get_float_tag(&obj, tags::SPACING_BETWEEN_SLICES, 0.0);
+    let number_of_frames =
+        get_int_tag(&obj, tags::NUMBER_OF_FRAMES, 1u32);
 
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] all metadata extracted, building struct...");
     let mut metadata = DicomMetadata::new(DicomMetadata {
         patient_id,
         patient_name,
@@ -193,46 +208,100 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         pixel_representation,
         pixel_spacing,
         image_position_patient,
+        image_orientation_patient,
         slice_location,
         spacing_between_slices,
+        number_of_frames,
     });
 
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] metadata built, starting pixel extraction...");
+
     // --- Pixel Data Extraction ---
-    // Uses dicom-pixeldata's PixelDecoder trait which handles ALL transfer
-    // syntaxes: uncompressed, JPEG lossless/lossy, JPEG-LS, JPEG 2000, RLE, etc.
+    //
+    // Two-path strategy to avoid WASM OOM on large multi-frame DICOMs:
+    //
+    //   PATH 1 (fast): Read the raw PixelData element bytes directly.
+    //     Works for all uncompressed/native transfer syntaxes — the bytes
+    //     are the literal pixel values.  We slice to the first frame only.
+    //
+    //   PATH 2 (fallback): Use dicom-pixeldata's decoder.  Needed for
+    //     compressed transfer syntaxes (JPEG, JPEG-LS, JPEG 2000, RLE).
+    //     This decodes ALL frames and may panic in WASM on huge files.
+    //
     let mut pixel_data: Vec<i16> = Vec::new();
 
     if !config.skip_pixels {
-        if let Ok(decoded) = obj.decode_pixel_data() {
-            let raw_bytes = decoded.data().to_vec();
+        let bytes_per_sample = (bits_allocated as usize).div_ceil(8);
+        let samples_per_frame =
+            (width as usize) * (height as usize) * (samples_per_pixel as usize);
+        let frame_bytes = samples_per_frame * bytes_per_sample;
 
-            if !raw_bytes.is_empty() {
-                if bits_allocated <= 8 {
-                    if pixel_representation == 1 {
-                        pixel_data = raw_bytes.iter().map(|&b| b as i8 as i16).collect();
-                    } else {
-                        pixel_data = raw_bytes.iter().map(|&b| b as i16).collect();
+        // Try PATH 1: raw element read (works for native/uncompressed data).
+        #[cfg(debug_assertions)]
+        eprintln!("[RUST] bytes_per_sample={} samples_per_frame={} frame_bytes={}",
+            bytes_per_sample, samples_per_frame, frame_bytes);
+        let raw_element = obj.element(tags::PIXEL_DATA).ok();
+        let is_encapsulated = raw_element
+            .as_ref()
+            .map(|e| matches!(e.value(), DicomValue::PixelSequence(_)))
+            .unwrap_or(false);
+
+        if !is_encapsulated {
+            // ── PATH 1: uncompressed — read raw bytes, slice first frame ──
+            if let Some(ref elem) = raw_element {
+                if let Ok(raw_bytes) = elem.to_bytes() {
+                    let raw_slice = raw_bytes.as_ref();
+                    #[cfg(debug_assertions)]
+                    eprintln!("[RUST] PATH1 uncompressed: raw_bytes={} frame_bytes={} n_frames={}",
+                        raw_slice.len(), frame_bytes, number_of_frames);
+                    if !raw_slice.is_empty() && frame_bytes > 0 {
+                        let first_frame = if raw_slice.len() > frame_bytes {
+                            #[cfg(debug_assertions)]
+                            eprintln!("[RUST] PATH1 slicing first {frame_bytes} of {} bytes",
+                                raw_slice.len());
+                            &raw_slice[..frame_bytes]
+                        } else {
+                            raw_slice
+                        };
+                        pixel_data = convert_pixels(
+                            first_frame, bits_allocated, pixel_representation);
                     }
-                } else if raw_bytes.len() % 2 == 0 {
-                    pixel_data = if pixel_representation == 0 {
-                        // Unsigned 16-bit → offset to signed range for shader
-                        raw_bytes
-                            .chunks_exact(2)
-                            .map(|chunk| {
-                                let raw = u16::from_le_bytes([chunk[0], chunk[1]]);
-                                (raw as i32 - 32768) as i16
-                            })
-                            .collect()
-                    } else {
-                        raw_bytes
-                            .chunks_exact(2)
-                            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                            .collect()
-                    };
                 }
             }
         }
+
+        // ── PATH 2: compressed — use full decoder (may be slow/large) ──
+        if pixel_data.is_empty() && !is_encapsulated {
+            // raw read failed; try decoder as fallback
+        }
+        if pixel_data.is_empty() {
+            #[cfg(debug_assertions)]
+            eprintln!("[RUST] PATH1 empty (is_encapsulated={}), falling back to PATH2...", is_encapsulated);
+            if let Ok(decoded) = obj.decode_pixel_data() {
+                let raw_bytes = decoded.data();
+                #[cfg(debug_assertions)]
+                eprintln!("[RUST] PATH2 decoded {} bytes, keeping first {} frame_bytes",
+                    raw_bytes.len(), frame_bytes);
+                if !raw_bytes.is_empty() && frame_bytes > 0 {
+                    let first_frame = if raw_bytes.len() > frame_bytes {
+                        &raw_bytes[..frame_bytes]
+                    } else {
+                        raw_bytes
+                    };
+                    pixel_data = convert_pixels(
+                        first_frame, bits_allocated, pixel_representation);
+                }
+            } else {
+                #[cfg(debug_assertions)]
+                eprintln!("[RUST] PATH2 decode_pixel_data FAILED");
+            }
+        }
     }
+
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] pixel_data.len={} (i16 elements) window_center={} window_width={}",
+        pixel_data.len(), window_center, window_width);
 
     // If the DICOM header did not provide window center/width, compute sensible
     // defaults from the actual pixel data range so the image is immediately visible.
@@ -249,6 +318,8 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
     metadata.window_center = window_center;
     metadata.window_width = window_width;
 
+    #[cfg(debug_assertions)]
+    eprintln!("[RUST] DONE — returning DicomFrameResult");
     Ok(DicomFrameResult::new(DicomFrameResult {
         metadata,
         pixel_data,
@@ -284,4 +355,37 @@ where
         .and_then(|e| e.to_int::<i64>().ok())
         .and_then(|v| T::try_from(v).ok())
         .unwrap_or(default)
+}
+
+/// Converts raw pixel bytes into i16 values, applying offset for unsigned data.
+///
+/// [bytes] should be the raw pixel data (1 or 2 bytes per sample).
+/// [bits_allocated] determines byte width (≤8 = 1 byte, >8 = 2 bytes).
+/// [pixel_representation] = 0 for unsigned, 1 for signed.
+fn convert_pixels(bytes: &[u8], bits_allocated: u16, pixel_representation: u16) -> Vec<i16> {
+    if bits_allocated <= 8 {
+        if pixel_representation == 1 {
+            bytes.iter().map(|&b| b as i8 as i16).collect()
+        } else {
+            bytes.iter().map(|&b| b as i16).collect()
+        }
+    } else if bytes.len() % 2 == 0 {
+        if pixel_representation == 0 {
+            // Unsigned 16-bit → offset to signed range for shader
+            bytes
+                .chunks_exact(2)
+                .map(|chunk| {
+                    let raw = u16::from_le_bytes([chunk[0], chunk[1]]);
+                    (raw as i32 - 32768) as i16
+                })
+                .collect()
+        } else {
+            bytes
+                .chunks_exact(2)
+                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect()
+        }
+    } else {
+        Vec::new()
+    }
 }

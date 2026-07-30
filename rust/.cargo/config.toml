@@ -2,7 +2,7 @@
 rustflags = [
     "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals",
     "-C", "link-args=--shared-memory",
-    "-C", "link-args=--max-memory=1073741824",
+    "-C", "link-args=--max-memory=2147483648",
     "-C", "link-args=--import-memory",
     "-C", "link-args=--export=__heap_base",
     "-C", "link-args=--export=__wasm_init_tls",

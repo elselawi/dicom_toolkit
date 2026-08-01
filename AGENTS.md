@@ -138,11 +138,9 @@ flutter_rust_bridge_codegen generate
 # Build Rust (native)
 cargo build && cargo build --release
 
-# Build WASM (web)
-$env:RUSTUP_TOOLCHAIN='nightly'
-wasm-pack build --dev --target no-modules --out-name dicom_toolkit
-Copy-Item rust/pkg/* web/pkg/ -Force
-Copy-Item rust/pkg/* example/web/pkg/ -Force
+# Build WASM (web) — use the convenience script:
+.\tool\rebuild_wasm.ps1        # debug (fast compile)
+.\tool\rebuild_wasm.ps1 -Release  # release (smaller .wasm)
 
 # Tests
 flutter test
@@ -154,8 +152,18 @@ dart analyze lib
 **CRITICAL**: After changing any `rust/src/api/**/*.rs` struct:
 1. `flutter_rust_bridge_codegen generate`
 2. `cargo build && cargo build --release`
-3. If web: rebuild WASM with wasm-pack
+3. If web: `.\tool\rebuild_wasm.ps1`
 4. `flutter clean` in example if running there
+
+### Web WASM artifacts
+
+WASM binaries (`web/pkg/dicom_toolkit.js`, `web/pkg/dicom_toolkit_bg.wasm`) are
+**committed to git**. Consumers get them automatically — no Rust toolchain needed.
+`flutter build web` copies everything under `web/` to the build output.
+
+When you modify `rust/src/`, rebuild with `.\tool\rebuild_wasm.ps1` and commit
+the updated `web/pkg/` and `rust/pkg/` files. The script also strips the
+`.gitignore` that `wasm-pack` creates (which would otherwise block the files).
 
 ---
 
@@ -183,7 +191,7 @@ dart analyze lib
 ## Common Pitfalls
 
 1. **Editing generated code** — changes to `lib/src/rust/` will be overwritten by codegen
-2. **Stale WASM** — after Rust struct changes, WASM binary must be rebuilt separately (`wasm-pack`)
+2. **Stale WASM** — after Rust struct changes, run `.\tool\rebuild_wasm.ps1` and commit updated `web/pkg/` + `rust/pkg/`
 3. **Stale DLL** — after codegen, both `cargo build` (debug) and `cargo build --release` must run
 4. **Shader asset path** — use `LibShaders.dicomWindow` constant, not a raw string
 5. **SSE vs DCO codec** — `flutter test` uses DCO (VM FFI), `flutter run` uses SSE (serialized). Both need matching DLLs

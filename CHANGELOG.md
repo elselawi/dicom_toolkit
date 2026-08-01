@@ -1,3 +1,11 @@
+## 0.2.6
+
+- **(fix)** web: `web/pkg/` and `rust/pkg/` `.gitignore` files blocked WASM artifacts from git — consumers got empty directories on clone, causing `wasm_bindgen is not defined` + 404 errors at runtime
+- **(fix)** web: `dicom_toolkit.js` + `dicom_toolkit_bg.wasm` are now committed to git — consumers get pre-built WASM automatically, no Rust toolchain required
+- **(build)** `tool/rebuild_wasm.ps1` — convenience script for rebuilding WASM after Rust changes; handles RUSTFLAGS, `wasm-pack`, and `.gitignore` cleanup
+- **(build)** `example/web/pkg/.gitignore` also removed — example app WASM is now tracked
+- **(docs)** AGENTS.md: updated Build Commands and Common Pitfalls for the committed-WASM workflow
+
 ## 0.2.5
 
 - **(feat)** 2 new extracted DICOM tags in Rust `DicomMetadata` (35→37): `imageOrientationPatient` (0020,0037), `numberOfFrames` (0028,0008)

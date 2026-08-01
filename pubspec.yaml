@@ -1,6 +1,6 @@
 name: dicom_toolkit
 description: "An advanced medical imaging and DICOM processing library for Flutter."
-version: 0.2.6
+version: 0.2.7
 
 repository: https://github.com/elselawi/dicom_toolkit
 homepage: https://dicomtoolkit.pages.dev
@@ -63,6 +63,9 @@ flutter:
       web:
         pluginClass: DicomToolkitWeb
         fileName: dicom_toolkit_web.dart
+
+  assets:
+    - web/pkg/
 
   shaders:
     - assets/shaders/dicom_window.frag

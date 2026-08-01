@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.5`
+- **Version**: `0.2.6`
 
 ---
 
@@ -64,8 +64,7 @@ rust/
 
 assets/shaders/dicom_window.frag    ← GLSL: 16-bit unpack + HU + windowing + LUT
 
-web/pkg/                            ← WASM + JS bindings (wasm-pack output)
-example/web/pkg/                    ← copy for example app
+web/pkg/                            ← WASM + JS bindings (wasm-pack output, committed to git)
 
 test/
   dicom_tag_id_test.dart            ← 31 constants, equality, hex
@@ -159,11 +158,16 @@ dart analyze lib
 
 WASM binaries (`web/pkg/dicom_toolkit.js`, `web/pkg/dicom_toolkit_bg.wasm`) are
 **committed to git**. Consumers get them automatically — no Rust toolchain needed.
-`flutter build web` copies everything under `web/` to the build output.
+
+`pubspec.yaml` declares `web/pkg/` as a Flutter asset. When a consuming app runs
+`flutter build web`, the WASM files are bundled into
+`assets/packages/dicom_toolkit/web/pkg/`. At runtime, `DicomToolkit.init()`
+detects the web platform and loads the WASM from this asset path automatically.
 
 When you modify `rust/src/`, rebuild with `.\tool\rebuild_wasm.ps1` and commit
 the updated `web/pkg/` and `rust/pkg/` files. The script also strips the
-`.gitignore` that `wasm-pack` creates (which would otherwise block the files).
+`.gitignore` that `wasm-pack` creates (which would otherwise block the files) and
+copies artifacts to all required locations.
 
 ---
 

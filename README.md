@@ -304,14 +304,13 @@ cargo install wasm-pack
 After any change to `rust/src/api/**`, rebuild the WASM binary:
 
 ```bash
-cd rust
-$env:RUSTUP_TOOLCHAIN = 'nightly'
-wasm-pack build --dev --target no-modules --out-name dicom_toolkit
-
-# Copy to both package locations:
-Copy-Item pkg/* ../web/pkg/ -Force
-Copy-Item pkg/* ../example/web/pkg/ -Force
+.\tool\rebuild_wasm.ps1          # debug (fast compile)
+.\tool\rebuild_wasm.ps1 -Release  # release (smaller .wasm, ~1.3 MB)
 ```
+
+The script compiles the Rust crate to WASM, copies the artifacts to `web/pkg/` and `rust/pkg/`, and strips the `.gitignore` that `wasm-pack` creates.
+
+WASM artifacts are **committed to git** — consumers get them automatically via Flutter's asset system. No manual copy step, no Rust toolchain required on the consumer side.
 
 ### 3. Build + serve the Flutter app
 

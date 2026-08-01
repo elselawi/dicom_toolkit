@@ -1,10 +1,15 @@
+## 0.2.7
+- **(fix)** web: `DicomToolkit.init()` detects web platform and loads WASM from the Flutter asset path instead of the web root — no manual copy step needed in the consuming app
+- **(build)** `tool/rebuild_wasm.ps1` — convenience script for rebuilding WASM after Rust changes; handles RUSTFLAGS, `wasm-pack`, and `.gitignore` cleanup; release build produces ~1.3 MB WASM (down from 8.5 MB debug)
+- **(cleanup)** removed `example/web/pkg/` — no longer needed since WASM is bundled via package assets
+
 ## 0.2.6
 
 - **(fix)** web: `web/pkg/` and `rust/pkg/` `.gitignore` files blocked WASM artifacts from git — consumers got empty directories on clone, causing `wasm_bindgen is not defined` + 404 errors at runtime
 - **(fix)** web: `dicom_toolkit.js` + `dicom_toolkit_bg.wasm` are now committed to git — consumers get pre-built WASM automatically, no Rust toolchain required
-- **(build)** `tool/rebuild_wasm.ps1` — convenience script for rebuilding WASM after Rust changes; handles RUSTFLAGS, `wasm-pack`, and `.gitignore` cleanup
-- **(build)** `example/web/pkg/.gitignore` also removed — example app WASM is now tracked
-- **(docs)** AGENTS.md: updated Build Commands and Common Pitfalls for the committed-WASM workflow
+- **(fix)** web: added `web/pkg/` as a Flutter asset in `pubspec.yaml` — `flutter build web` now bundles WASM into `assets/packages/dicom_toolkit/web/pkg/` automatically
+- **(docs)** AGENTS.md: updated Build Commands, architecture diagram, Web WASM artifacts section, and version to 0.2.6
+- **(docs)** README.md: updated Web support section with new rebuild script and asset bundling workflow
 
 ## 0.2.5
 

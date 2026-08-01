@@ -2,6 +2,12 @@ library;
 
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_rust_bridge/flutter_rust_bridge.dart'
+    show loadExternalLibrary;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibraryLoaderConfig;
+
 import 'src/core/dicom_parse_result.dart';
 import 'src/rust/frb_generated.dart';
 import 'src/tools/dicom_renderer.dart';
@@ -40,7 +46,23 @@ abstract class DicomToolkit {
 
   /// Initializes the underlying native engine.
   /// Must be called once at application startup, before any parsing or rendering.
-  static Future<void> init() => RustLib.init();
+  ///
+  /// On web, the WASM artifacts are pre-loaded from the Flutter asset path
+  /// (`assets/packages/dicom_toolkit/web/pkg/`) so that `flutter build web`
+  /// automatically bundles them — no manual copy step needed.
+  static Future<void> init() async {
+    if (kIsWeb) {
+      final lib = await loadExternalLibrary(
+        const ExternalLibraryLoaderConfig(
+          stem: 'dicom_toolkit',
+          ioDirectory: 'rust/target/release/',
+          webPrefix: 'assets/packages/dicom_toolkit/web/pkg/',
+        ),
+      );
+      return RustLib.init(externalLibrary: lib);
+    }
+    return RustLib.init();
+  }
 
   /// One-liner: renders a [DicomParseResult] to a [dart:ui.Image].
   ///

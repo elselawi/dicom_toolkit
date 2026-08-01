@@ -21,7 +21,8 @@ $env:RUSTUP_TOOLCHAIN = 'nightly'
 $env:RUSTFLAGS = '-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-args=--shared-memory -C link-args=--max-memory=2147483648 -C link-args=--import-memory -C link-args=--export=__heap_base -C link-args=--export=__wasm_init_tls -C link-args=--export=__tls_size -C link-args=--export=__tls_align -C link-args=--export=__tls_base'
 
 # Build to rust/pkg/ first
-wasm-pack build -t no-modules -d pkg --no-typescript --out-name dicom_toolkit $profile -- -Z build-std=std,panic_abort
+# Note: explicit '.' path required before '--' cargo args
+wasm-pack build -t no-modules -d pkg --no-typescript --out-name dicom_toolkit $profile . -- -Z build-std=std,panic_abort 2>&1 | Select-String -NotMatch "wasm-validator|wasm-opt" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "wasm-pack build failed" }
 
 # wasm-pack creates a .gitignore that blocks everything — remove it

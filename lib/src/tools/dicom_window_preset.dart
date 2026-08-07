@@ -1,13 +1,3 @@
-/// A named windowing preset (center + width) and a collection of common
-/// radiological presets.
-///
-/// Use [DicomWindowPreset.bone], [DicomWindowPreset.lung], etc. to get
-/// CT-specific Hounsfield presets.  For modality-agnostic presets that adapt
-/// to the image's actual pixel range, use [DicomWindowPreset.forImage].
-///
-/// Create a custom one with [DicomWindowPreset.custom].
-library;
-
 import '../core/dicom_parse_result.dart';
 import '../core/dicom_pixel_data.dart';
 

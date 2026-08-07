@@ -149,12 +149,14 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
 
     // --- Align DICOM window center with our offset pixel storage ---
     // DICOM Window Center/Width are defined in the original pixel value space.
-    // For unsigned data, our pipeline offsets raw pixel values by -32768 to
-    // fit in i16 (and the shader reverses this). The window center must be
-    // offset identically so it aligns with the shader's coordinate space.
-    if pixel_representation == 0 && window_width > 0.0 {
-        window_center -= 32768.0;
-    }
+    // The centre is offset identically to the stored samples (see
+    // `convert_pixels`), so that metadata and pixels share a coordinate space.
+    window_center = align_window_center(
+        pixel_representation,
+        bits_allocated,
+        window_width,
+        window_center,
+    );
 
     // --- Pixel Spacing (try standard tag first, then Imager Pixel Spacing) ---
     let pixel_spacing = get_str_tag(&obj, tags::PIXEL_SPACING)
@@ -357,6 +359,30 @@ where
         .unwrap_or(default)
 }
 
+/// Aligns a DICOM window centre with the stored-pixel coordinate space.
+///
+/// DICOM Window Center/Width are defined in the original pixel value space.
+/// For unsigned data, our pipeline offsets raw pixel values by `-32768` to
+/// fit in `i16` (and the shader reverses this) — but ONLY for sample widths
+/// greater than 8 bits (`convert_pixels` keeps unsigned 8-bit samples in their
+/// native `0..255` range). The window centre is offset identically to the
+/// stored samples so that metadata and pixels share a coordinate space.
+///
+/// Offsetting an unsigned 8-bit centre (e.g. 128 → −32640) would put pixels
+/// and window in incompatible coordinate systems and clip the whole image.
+fn align_window_center(
+    pixel_representation: u16,
+    bits_allocated: u16,
+    window_width: f32,
+    window_center: f32,
+) -> f32 {
+    if pixel_representation == 0 && bits_allocated > 8 && window_width > 0.0 {
+        window_center - 32768.0
+    } else {
+        window_center
+    }
+}
+
 /// Converts raw pixel bytes into i16 values, applying offset for unsigned data.
 ///
 /// [bytes] should be the raw pixel data (1 or 2 bytes per sample).
@@ -387,5 +413,114 @@ fn convert_pixels(bytes: &[u8], bits_allocated: u16, pixel_representation: u16) 
         }
     } else {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── convert_pixels: 8-bit paths ─────────────────────────────
+
+    #[test]
+    fn converts_unsigned_8bit_passthrough() {
+        // bits <= 8, pixel_representation == 0 → byte as positive i16.
+        assert_eq!(convert_pixels(&[0, 1, 127, 128, 255], 8, 0), vec![0, 1, 127, 128, 255]);
+    }
+
+    #[test]
+    fn converts_signed_8bit_two_complement() {
+        // bits <= 8, pixel_representation == 1 → i8 sign extension.
+        assert_eq!(convert_pixels(&[0, 1, 127, 128, 255], 8, 1), vec![0, 1, 127, -128, -1]);
+    }
+
+    // ── convert_pixels: 16-bit paths ────────────────────────────
+
+    #[test]
+    fn converts_signed_16bit_little_endian() {
+        let bytes = [0x34, 0x12, 0xFC, 0xFF]; // 0x1234 = 4660; 0xFFFC = -4
+        assert_eq!(convert_pixels(&bytes, 16, 1), vec![4660, -4]);
+    }
+
+    #[test]
+    fn offsets_unsigned_16bit_into_signed_range() {
+        // Unsigned raw 0 → 0 - 32768 = -32768
+        assert_eq!(convert_pixels(&[0x00, 0x00], 16, 0), vec![-32768]);
+        // Unsigned raw 0x8000 (32768) → 32768 - 32768 = 0
+        assert_eq!(convert_pixels(&[0x00, 0x80], 16, 0), vec![0]);
+        // Unsigned raw 0xFFFF (65535) → 65535 - 32768 = 32767
+        assert_eq!(convert_pixels(&[0xFF, 0xFF], 16, 0), vec![32767]);
+    }
+
+    #[test]
+    fn handles_16bit_little_endian_byte_order() {
+        // 0x1234 little-endian is bytes [0x34, 0x12].
+        let bytes = [0x34, 0x12];
+        assert_eq!(convert_pixels(&bytes, 16, 1), vec![0x1234]);
+        // Wrong order [0x12, 0x34] gives 0x3412.
+        assert_eq!(convert_pixels(&[0x12, 0x34], 16, 1), vec![0x3412]);
+    }
+
+    #[test]
+    fn returns_empty_for_odd_length_16bit() {
+        // Buffers with a trailing byte cannot be chunked → empty.
+        assert_eq!(convert_pixels(&[0x01, 0x02, 0x03], 16, 0), Vec::<i16>::new());
+        assert_eq!(convert_pixels(&[0x01, 0x02, 0x03], 16, 1), Vec::<i16>::new());
+    }
+
+    #[test]
+    fn returns_empty_for_empty_input() {
+        assert_eq!(convert_pixels(&[], 16, 0), Vec::<i16>::new());
+        assert_eq!(convert_pixels(&[], 16, 1), Vec::<i16>::new());
+        assert_eq!(convert_pixels(&[], 8, 0), Vec::<i16>::new());
+    }
+
+    #[test]
+    fn boundary_bits_allocated_switches_width() {
+        // bits_allocated == 8 → 1-byte path.
+        assert_eq!(convert_pixels(&[255], 8, 0), vec![255]);
+        // bits_allocated == 9 → 2-byte path.
+        assert_eq!(convert_pixels(&[0xFF, 0xFF], 9, 0), vec![32767]);
+        // bits_allocated == 0 ≤ 8 → treated as 1-byte.
+        assert_eq!(convert_pixels(&[7], 0, 0), vec![7]);
+    }
+
+    #[test]
+    fn signed_16bit_full_range_roundtrip() {
+        // -32768 (0x8000) and 32767 (0x7FFF) round-trip exactly.
+        assert_eq!(convert_pixels(&[0x00, 0x80], 16, 1), vec![-32768]);
+        assert_eq!(convert_pixels(&[0xFF, 0x7F], 16, 1), vec![32767]);
+    }
+
+    // ── align_window_center: unsigned 8-bit vs 16-bit ──────────
+
+    #[test]
+    fn offset_unsigned_16bit_window_center_into_signed_range() {
+        // Unsigned 16-bit samples are shifted -32768; the centre must be too.
+        // DICOM centre 32768 → 0 in stored-pixel space.
+        assert_eq!(align_window_center(0, 16, 256.0, 32768.0), 0.0);
+        assert_eq!(align_window_center(0, 16, 256.0, 128.0), 128.0 - 32768.0);
+    }
+
+    #[test]
+    fn does_not_offset_unsigned_8bit_window_center() {
+        // Unsigned 8-bit samples stay in 0..255, so the centre must stay too:
+        // centre 128 → mid-gray, NOT −32640.
+        assert_eq!(align_window_center(0, 8, 256.0, 128.0), 128.0);
+        assert_eq!(align_window_center(0, 8, 256.0, 128.0), 128.0);
+    }
+
+    #[test]
+    fn does_not_offset_signed_window_center() {
+        // Signed samples need no offset regardless of bit width.
+        assert_eq!(align_window_center(1, 16, 256.0, 128.0), 128.0);
+        assert_eq!(align_window_center(1, 8, 256.0, 128.0), 128.0);
+    }
+
+    #[test]
+    fn does_not_offset_when_window_width_is_zero() {
+        // Zero/absent window width means no windowing metadata to align.
+        assert_eq!(align_window_center(0, 16, 0.0, 32768.0), 32768.0);
+        assert_eq!(align_window_center(0, 16, -1.0, 32768.0), 32768.0);
     }
 }

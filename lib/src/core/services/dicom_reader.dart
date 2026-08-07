@@ -22,7 +22,7 @@ class DicomFileInfo {
   /// The file name (including extension), extracted from [filePath].
   final String fileName;
 
-  /// All 27 extracted DICOM metadata fields.
+  /// All extracted DICOM metadata fields.
   final DicomMetadata metadata;
 
   @override

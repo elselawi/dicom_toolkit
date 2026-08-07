@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.6`
+- **Version**: `0.2.8`
 
 ---
 
@@ -41,6 +41,7 @@ lib/
       dicom_roi.dart                 ← rectangular ROI + RoiStatistics
       dicom_ruler.dart               ← mm distance from pixel spacing
       dicom_window_preset.dart       ← presets (CT constants + forImage() factory)
+    debug_log.dart                   ← conditional debug-only logger (kDebugMode)
     viewer/
       dicom_viewer_controller.dart   ← ChangeNotifier state manager
     rust/                            ← AUTO-GENERATED — never hand-edit
@@ -70,11 +71,15 @@ test/
   dicom_tag_id_test.dart            ← 31 constants, equality, hex
   dicom_pixel_data_test.dart        ← sealed hierarchy, buffer
   dicom_window_preset_test.dart     ← 7 presets, forImage(), equality
+  dicom_window_preset_for_image_test.dart ← forImage() edge cases
   dicom_metadata_test.dart          ← typed getters, tag(), pixelSpacing
   dicom_parse_result_test.dart      ← fromFrame, frame(), hasPixels
   dicom_roi_test.dart               ← compute(), copyWith, clamping
   dicom_ruler_test.dart             ← measure(), spacing fallback
   dicom_parser_test.dart            ← mocked decoder delegation
+  dicom_renderer_test.dart          ← pack16Bit + applyWindowingRgba helpers
+  dicom_color_map_lut_test.dart     ← ColorMapLut.generate for every map
+  dicom_export_test.dart            ← PNG export + failure-path disposal
   dicom_viewer_controller_test.dart ← state lifecycle, error paths
   dicom_viewer_test.dart            ← widget states (loading, error, empty)
   dicom_exceptions_test.dart        ← DicomException hierarchy

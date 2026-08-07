@@ -1,3 +1,31 @@
+## 0.2.8
+
+- **(fix)** `DicomMetadata.pixelSpacingX`/`pixelSpacingY` now map DICOM row/column
+  spacing to the image Y/X axes correctly. Previously the two getters were swapped:
+  `pixelSpacingX` returned the row spacing and `pixelSpacingY` returned the column
+  spacing. DICOM encodes `[row, column]`; the convenience getters now present
+  `X`/`column` (component 1) then `Y`/`row` (component 0). This is a behavioral
+  correction for anisotropic images — consumers that relied on the swapped values
+  will see corrected output.
+- **(fix)** Unsigned 8-bit images no longer get their window centre offset by
+  `-32768` in the Rust parser, so 8-bit pixel values and window metadata stay in
+  the same `0..255` coordinate space (clinically correct contrast).
+- **(fix)** `DicomExport.toPngBytes` now disposes the rendered `ui.Image` on success
+  **and** failure paths (encoding `null`/exception), preventing a large raster leak
+  under memory pressure. PNG encoding is now injectable so failures can be tested.
+- **(fix)** `DicomRuler` now correctly maps DICOM row/column spacing to the image
+  Y/X axes (row spacing → y, column spacing → x), fixing horizontal/vertical
+  distance measurements on anisotropic images.
+- **(refactor)** `DicomRenderer` extracts pure, GPU-free `pack16Bit` and
+  `applyWindowingRgba` helpers, and routes rendering through them — enabling
+  unit testing without a GPU/rasterizer.
+- **(feat)** new `DebugLogger` (`debugLog`) replaces raw `print()` calls across the
+  decoder, renderer, viewer, and controller. Logs now emit only in debug builds
+  (`kDebugMode`); production/profile/release consoles stay clean.
+- **(test)** 292 tests pass — new coverage for the color-map LUT, CPU-windowing and
+  16-bit-packing helpers, `forImage` preset edge cases, PNG export (including
+  failure-path disposal), and the corrected pixel-spacing semantics.
+
 ## 0.2.7
 - **(fix)** web: `DicomToolkit.init()` detects web platform and loads WASM from the Flutter asset path instead of the web root — no manual copy step needed in the consuming app
 - **(build)** `tool/rebuild_wasm.ps1` — convenience script for rebuilding WASM after Rust changes; handles RUSTFLAGS, `wasm-pack`, and `.gitignore` cleanup; release build produces ~1.3 MB WASM (down from 8.5 MB debug)

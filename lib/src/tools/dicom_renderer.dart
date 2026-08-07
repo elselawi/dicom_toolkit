@@ -8,6 +8,7 @@ import '../core/constants/color_maps.dart';
 import '../core/constants/lib_shaders.dart';
 import '../core/dicom_parse_result.dart';
 import '../core/dicom_pixel_data.dart';
+import '../debug_log.dart';
 
 /// GPU-accelerated DICOM image renderer.
 ///
@@ -38,15 +39,15 @@ class DicomRenderer {
   /// On web (CanvasKit), FragmentProgram is unsupported — returns null silently.
   Future<ui.FragmentShader?> get shader async {
     if (_shader != null) {
-      print('[DART] renderer.shader: already cached');
+      debugLog('[DART] renderer.shader: already cached');
       return _shader;
     }
-    print('[DART] renderer.shader: attempting _compileShader...');
+    debugLog('[DART] renderer.shader: attempting _compileShader...');
     try {
       _shader = await _compileShader();
-      print('[DART] renderer.shader: compiled OK');
+      debugLog('[DART] renderer.shader: compiled OK');
     } catch (e) {
-      print('[DART] renderer.shader: compile FAILED — $e');
+      debugLog('[DART] renderer.shader: compile FAILED — $e');
       _shader = null;
     }
     return _shader;
@@ -54,12 +55,12 @@ class DicomRenderer {
 
   /// Compiles the GLSL windowing shader from assets.
   Future<ui.FragmentShader> _compileShader() async {
-    print(
+    debugLog(
         '[DART] renderer._compileShader: loading asset ${LibShaders.dicomWindow}...');
     final program = await ui.FragmentProgram.fromAsset(LibShaders.dicomWindow);
-    print('[DART] renderer._compileShader: FragmentProgram loaded');
+    debugLog('[DART] renderer._compileShader: FragmentProgram loaded');
     final fs = program.fragmentShader();
-    print('[DART] renderer._compileShader: fragmentShader OK');
+    debugLog('[DART] renderer._compileShader: fragmentShader OK');
     return fs;
   }
 
@@ -84,7 +85,7 @@ class DicomRenderer {
     final height = pixelData.height;
     final pixelCount = width * height;
     final meta = result.metadata;
-    print('[DART] createTexture: applyWindowing=$applyWindowing '
+    debugLog('[DART] createTexture: applyWindowing=$applyWindowing '
         'buffer.len=${data.length} w=$width h=$height pixelCount=$pixelCount');
 
     if (applyWindowing) {
@@ -93,20 +94,17 @@ class DicomRenderer {
       final ww = (windowWidth ?? meta.windowWidth).clamp(1.0, 65536.0);
       final slope = meta.rescaleSlope;
       final intercept = meta.rescaleIntercept;
-      final low = wc - ww / 2.0;
-      print(
+      debugLog(
           '[DART] createTexture CPU: wc=$wc ww=$ww slope=$slope intercept=$intercept');
-      final rgbaData = Uint8List(pixelCount * 4);
-      for (var i = 0; i < pixelCount && i < data.length; i++) {
-        final hu = data[i].toDouble() * slope + intercept;
-        final norm = ((hu - low) / ww).clamp(0.0, 1.0);
-        final v = (norm * 255.0).round();
-        rgbaData[i * 4 + 0] = v;
-        rgbaData[i * 4 + 1] = v;
-        rgbaData[i * 4 + 2] = v;
-        rgbaData[i * 4 + 3] = 255;
-      }
-      print(
+      final rgbaData = applyWindowingRgba(
+        data,
+        pixelCount,
+        windowCenter: wc,
+        windowWidth: ww,
+        slope: slope,
+        intercept: intercept,
+      );
+      debugLog(
           '[DART] createTexture CPU: packing done, calling decodeImageFromPixels...');
       final completer = Completer<ui.Image>();
       ui.decodeImageFromPixels(
@@ -115,29 +113,21 @@ class DicomRenderer {
         height,
         ui.PixelFormat.rgba8888,
         (final ui.Image img) {
-          print(
+          debugLog(
               '[DART] createTexture CPU: decodeImageFromPixels callback, img=${img.width}x${img.height}');
           completer.complete(img);
         },
       );
-      print('[DART] createTexture CPU: awaiting completer...');
+      debugLog('[DART] createTexture CPU: awaiting completer...');
       return completer.future;
     }
 
     // ── GPU path: pack 16-bit into R/G channels for shader ──
-    print(
-        '[DART] createTexture GPU: packing ${pixelCount} pixels into RGBA...');
-    final rgbaData = Uint8List(pixelCount * 4);
+    debugLog(
+        '[DART] createTexture GPU: packing $pixelCount pixels into RGBA...');
+    final rgbaData = pack16Bit(data, pixelCount);
 
-    for (var i = 0; i < pixelCount && i < data.length; i++) {
-      final val = data[i] + 32768; // Offset to unsigned u16 range
-      rgbaData[i * 4 + 0] = (val >> 8) & 0xFF; // R = high byte
-      rgbaData[i * 4 + 1] = val & 0xFF; // G = low byte
-      rgbaData[i * 4 + 2] = 0; // B = unused
-      rgbaData[i * 4 + 3] = 255; // A = opaque
-    }
-
-    print(
+    debugLog(
         '[DART] createTexture GPU: packing done, calling decodeImageFromPixels...');
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
@@ -146,12 +136,12 @@ class DicomRenderer {
       height,
       ui.PixelFormat.rgba8888,
       (final ui.Image img) {
-        print(
+        debugLog(
             '[DART] createTexture GPU: decodeImageFromPixels callback, img=${img.width}x${img.height}');
         completer.complete(img);
       },
     );
-    print('[DART] createTexture GPU: awaiting completer...');
+    debugLog('[DART] createTexture GPU: awaiting completer...');
     return completer.future;
   }
 
@@ -183,11 +173,11 @@ class DicomRenderer {
     final bool? invert,
     final int rotationSteps = 0,
   }) async {
-    print('[DART] renderer.render: entry, awaiting shader...');
+    debugLog('[DART] renderer.render: entry, awaiting shader...');
     final s = await shader;
-    print('[DART] renderer.render: shader=${s == null ? "NULL" : "OK"}');
+    debugLog('[DART] renderer.render: shader=${s == null ? "NULL" : "OK"}');
     if (s == null) {
-      print('[DART] renderer.render: taking CPU fallback path');
+      debugLog('[DART] renderer.render: taking CPU fallback path');
       return createTexture(
         result,
         windowCenter: windowCenter,
@@ -281,4 +271,56 @@ class DicomRenderer {
   void dispose() {
     _shader = null;
   }
+}
+
+/// Applies window-center/window-width rescaling (with the Hounsfield slope /
+/// intercept transform) to [pixels] and packs the result into an RGBA
+/// [Uint8List] (grayscale, alpha=255).
+///
+/// This is the pure, GPU-free math used by the web/CPU rendering fallback.
+/// It is isolated here so it can be unit-tested without a GPU.
+///
+/// [pixelCount] caps the number of pixels processed so that a shorter buffer
+/// is never over-read. Each source pixel maps to 4 output bytes.
+Uint8List applyWindowingRgba(
+  final List<int> pixels,
+  final int pixelCount, {
+  required final double windowCenter,
+  required final double windowWidth,
+  required final double slope,
+  required final double intercept,
+}) {
+  final ww = windowWidth.clamp(1.0, 65536.0);
+  final low = windowCenter - ww / 2.0;
+  final rgbaData = Uint8List(pixelCount * 4);
+  for (var i = 0; i < pixelCount && i < pixels.length; i++) {
+    final hu = pixels[i].toDouble() * slope + intercept;
+    final norm = ((hu - low) / ww).clamp(0.0, 1.0);
+    final v = (norm * 255.0).round();
+    rgbaData[i * 4 + 0] = v;
+    rgbaData[i * 4 + 1] = v;
+    rgbaData[i * 4 + 2] = v;
+    rgbaData[i * 4 + 3] = 255;
+  }
+  return rgbaData;
+}
+
+/// Packs 16-bit [pixels] into an RGBA [Uint8List] for GPU consumption.
+///
+/// Each signed value is offset by +32768 into the unsigned u16 range, then
+/// split across R (high byte) and G (low byte) channels so the fragment
+/// shader can reconstruct the full 16 bits. B is unused and A is opaque.
+///
+/// [pixelCount] caps the number of pixels processed so that a shorter buffer
+/// is never over-read.
+Uint8List pack16Bit(final List<int> pixels, final int pixelCount) {
+  final rgbaData = Uint8List(pixelCount * 4);
+  for (var i = 0; i < pixelCount && i < pixels.length; i++) {
+    final val = pixels[i] + 32768; // Offset to unsigned u16 range
+    rgbaData[i * 4 + 0] = (val >> 8) & 0xFF; // R = high byte
+    rgbaData[i * 4 + 1] = val & 0xFF; // G = low byte
+    rgbaData[i * 4 + 2] = 0; // B = unused
+    rgbaData[i * 4 + 3] = 255; // A = opaque
+  }
+  return rgbaData;
 }

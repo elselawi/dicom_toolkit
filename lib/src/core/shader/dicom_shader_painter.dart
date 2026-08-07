@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/dicom_parse_result.dart';
@@ -55,9 +56,12 @@ class DicomShaderPainter extends CustomPainter {
   /// Performs the actual drawing operation using the fragment shader.
   @override
   void paint(final Canvas canvas, final Size size) {
-    print(
-        '[DART] ShaderPainter.paint: size=${size.width.toInt()}x${size.height.toInt()} '
-        'wc=$windowCenter ww=$windowWidth colorize=$colorize invert=$invert');
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print(
+          '[DART] ShaderPainter.paint: size=${size.width.toInt()}x${size.height.toInt()} '
+          'wc=$windowCenter ww=$windowWidth colorize=$colorize invert=$invert');
+    }
     final meta = result.metadata;
     final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
 

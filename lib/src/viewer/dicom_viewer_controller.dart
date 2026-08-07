@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/constants/color_maps.dart';
 import '../core/dicom_parse_result.dart';
+import '../debug_log.dart';
 import '../tools/dicom_parser.dart';
 import '../tools/dicom_renderer.dart';
 import '../tools/dicom_window_preset.dart';
@@ -95,12 +95,12 @@ class DicomViewerController extends ChangeNotifier {
   /// Ensures the fragment shader is compiled.
   /// On web, this may silently fail — rendering falls back to CPU.
   Future<void> ensureShader() async {
-    print(
+    debugLog(
         '[DART] controller.ensureShader: entry (_shader=${_shader == null ? "null" : "cached"})');
     if (_shader != null) return;
-    print('[DART] controller.ensureShader: calling _renderer.shader...');
+    debugLog('[DART] controller.ensureShader: calling _renderer.shader...');
     _shader = await _renderer.shader;
-    print(
+    debugLog(
         '[DART] controller.ensureShader: result=${_shader != null ? "OK" : "NULL (web)"}');
     notifyListeners();
   }
@@ -116,37 +116,37 @@ class DicomViewerController extends ChangeNotifier {
 
     try {
       await ensureShader();
-      print(
+      debugLog(
           '[DART] controller: ensureShader done, hasShader=${_shader != null}');
-      print('[DART] controller: parsing...');
+      debugLog('[DART] controller: parsing...');
       _result = await _parser.parse(bytes);
-      print(
+      debugLog(
           '[DART] controller: parsed OK, result.hasPixels=${_result!.hasPixels} '
           'result.isMonochrome=${_result!.isMonochrome} '
           'frameCount=${_result!.frameCount}');
-      print('[DART] controller: computing presets...');
+      debugLog('[DART] controller: computing presets...');
       // Auto-window to the full pixel range so the image is immediately visible
       // regardless of modality. DICOM header window values are frequently
       // missing or inappropriate for non-CT modalities (e.g. CR/DR X-ray).
       final presets = DicomWindowPreset.forImage(_result!);
       final defaultPreset = presets.firstWhere(
-        (p) => p.label == 'Full Range',
+        (final p) => p.label == 'Full Range',
         orElse: () => presets.first,
       );
       _windowCenter = defaultPreset.center;
       _windowWidth = defaultPreset.width;
-      print('[DART] controller: window L=${_windowCenter} W=${_windowWidth}');
-      print(
+      debugLog('[DART] controller: window L=$_windowCenter W=$_windowWidth');
+      debugLog(
           '[DART] controller: creating texture (hasShader=${_shader != null})...');
       _rawTexture = await _renderer.createTexture(_result!);
-      print(
+      debugLog(
           '[DART] controller: texture created OK, size=${_rawTexture!.width}x${_rawTexture!.height}');
       if (_colorMap != DicomColorMap.grayscale) {
         await _buildColorLut();
       }
     } catch (e, st) {
-      print('[DART] controller FAILED: $e');
-      print('[DART] stack: $st');
+      debugLog('[DART] controller FAILED: $e');
+      debugLog('[DART] stack: $st');
       _errorMessage = 'Failed to load DICOM: $e';
     } finally {
       _setLoading(false);

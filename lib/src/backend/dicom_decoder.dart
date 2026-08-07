@@ -1,7 +1,8 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import '../core/dicom_parse_result.dart';
 import '../core/dicom_tag_id.dart';
+import '../debug_log.dart';
 import '../rust/api/core/config/dicom_config.dart';
 import '../rust/api/init.dart' show loadDicomFromBytes;
 
@@ -27,15 +28,15 @@ class RustDecoder implements DicomDecoder {
     final Uint8List bytes, {
     final DicomConfig? config,
   }) async {
-    print('[DART] decode START: inputBytes=${bytes.length}');
+    debugLog('[DART] decode START: inputBytes=${bytes.length}');
     final finalConfig = config ?? await DicomConfig.default_();
-    print('[DART] decode: calling FFI loadDicomFromBytes...');
+    debugLog('[DART] decode: calling FFI loadDicomFromBytes...');
 
     final frameResult = await loadDicomFromBytes(
       bytes: bytes, // Uint8List directly — avoids toList() explosion on web
       config: finalConfig,
     );
-    print(
+    debugLog(
         '[DART] decode: FFI call returned OK, pixelData.length=${frameResult.pixelData.length} '
         'metadata.width=${frameResult.metadata.width} metadata.height=${frameResult.metadata.height}');
 
@@ -81,7 +82,7 @@ class RustDecoder implements DicomDecoder {
     };
 
     final result = DicomParseResult.fromFrame(frame: frameResult, tags: tags);
-    print(
+    debugLog(
         '[DART] decoder: width=${result.metadata.width} height=${result.metadata.height} '
         'pixelsInBuffer=${result.pixelData.length} frameCount=${result.frameCount} '
         'modality=${result.metadata.modality}');

@@ -140,13 +140,24 @@ class DicomMetadata {
         _tags[DicomTagId.imagerPixelSpacing];
   }
 
-  /// Parsed pixel spacing X (column) in mm, from [pixelSpacing].
+  /// Parsed pixel spacing along the image X (column) axis, in mm, from
+  /// [pixelSpacing].
+  ///
+  /// DICOM Pixel Spacing encodes `[row spacing, column spacing]`, where rows
+  /// map to the image Y axis and columns to the X axis. These convenience
+  /// getters therefore present the axes as `X`/`column` then `Y`/`row`:
+  /// `pixelSpacingX` returns the column spacing (component 1) and
+  /// `pixelSpacingY` returns the row spacing (component 0).
+  ///
   /// Returns `null` if [pixelSpacing] is absent or unparseable.
-  double? get pixelSpacingX => _parseSpacingComponent(pixelSpacing, 0);
+  double? get pixelSpacingX => _parseSpacingComponent(pixelSpacing, 1);
 
-  /// Parsed pixel spacing Y (row) in mm, from [pixelSpacing].
+  /// Parsed pixel spacing along the image Y (row) axis, in mm, from
+  /// [pixelSpacing].
+  ///
+  /// See [pixelSpacingX] for the DICOM row/column ordering discussion.
   /// Returns `null` if [pixelSpacing] is absent or unparseable.
-  double? get pixelSpacingY => _parseSpacingComponent(pixelSpacing, 1);
+  double? get pixelSpacingY => _parseSpacingComponent(pixelSpacing, 0);
 
   /// Instance number as an integer, parsed from [instanceNumber].
   /// Returns `null` if unparseable.

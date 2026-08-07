@@ -500,11 +500,12 @@ void main() {
   });
 
   group('Pixel spacing parsed components', () {
-    test('pixelSpacingX/Y parse correctly', () {
+    test('pixelSpacingX/Y parse correctly (row\\column → Y\\X)', () {
       final inner = _buildInner(pixelSpacing: '0.25\\0.5');
       final meta = DicomMetadata(inner: inner);
-      expect(meta.pixelSpacingX, 0.25);
-      expect(meta.pixelSpacingY, 0.5);
+      // DICOM: [row, column]. X = column = component 1; Y = row = component 0.
+      expect(meta.pixelSpacingX, 0.5);
+      expect(meta.pixelSpacingY, 0.25);
     });
 
     test('pixelSpacingX/Y return null for empty string', () {
@@ -516,8 +517,9 @@ void main() {
     test('pixelSpacingX/Y handle single component', () {
       final inner = _buildInner(pixelSpacing: '0.3');
       final meta = DicomMetadata(inner: inner);
-      expect(meta.pixelSpacingX, 0.3);
-      expect(meta.pixelSpacingY, isNull);
+      // Single component is the row spacing → Y = 0.3, X = null.
+      expect(meta.pixelSpacingX, isNull);
+      expect(meta.pixelSpacingY, 0.3);
     });
 
     test('pixelSpacingX reads from tag map fallback', () {
@@ -534,6 +536,14 @@ void main() {
       expect(meta.pixelSpacing, '0.1\\0.1');
       expect(meta.pixelSpacingX, 0.1);
       expect(meta.pixelSpacingY, 0.1);
+    });
+
+    test('anisotropic spacing maps row/column to Y/X', () {
+      // Row spacing 0.25, column spacing 0.50.
+      final inner = _buildInner(pixelSpacing: '0.25\\0.50');
+      final meta = DicomMetadata(inner: inner);
+      expect(meta.pixelSpacingX, 0.50); // column → X
+      expect(meta.pixelSpacingY, 0.25); // row → Y
     });
   });
 

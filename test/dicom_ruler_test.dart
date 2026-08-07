@@ -85,18 +85,52 @@ void main() {
       expect(distance, closeTo(5.0, 0.01));
     });
 
-    test('handles anisotropic spacing', () {
+    test('handles anisotropic spacing (row x col orientation)', () {
       const ruler = DicomRuler();
       final meta = _buildMeta(pixelSpacing: '2.0\\0.5');
 
-      // dx=5*2.0=10, dy=4*0.5=2 → sqrt(100+4)=sqrt(104)≈10.198
+      // DICOM PixelSpacing = [row, col] = [2.0, 0.5].
+      // x (column spacing) = 0.5, y (row spacing) = 2.0.
+      // dx=5*0.5=2.5, dy=4*2.0=8 → sqrt(6.25+64)=sqrt(70.25)≈8.382
       final distance = ruler.measure(
         meta,
         (x: 0, y: 0),
         (x: 5, y: 4),
       );
 
-      expect(distance, closeTo(10.198, 0.01));
+      expect(distance, closeTo(8.382, 0.01));
+    });
+
+    test('applies column spacing to horizontal (x) movement', () {
+      const ruler = DicomRuler();
+      // Row spacing 2.0, column spacing 0.5
+      final meta = _buildMeta(pixelSpacing: '2.0\\0.5');
+
+      // Pure horizontal move of 8 columns should use column spacing (0.5):
+      // 8 * 0.5 = 4.0 mm. If x incorrectly used row spacing it'd be 16 mm.
+      final distance = ruler.measure(
+        meta,
+        (x: 0, y: 0),
+        (x: 8, y: 0),
+      );
+
+      expect(distance, closeTo(4.0, 0.01));
+    });
+
+    test('applies row spacing to vertical (y) movement', () {
+      const ruler = DicomRuler();
+      // Row spacing 2.0, column spacing 0.5
+      final meta = _buildMeta(pixelSpacing: '2.0\\0.5');
+
+      // Pure vertical move of 3 rows should use row spacing (2.0):
+      // 3 * 2.0 = 6.0 mm. If y incorrectly used column spacing it'd be 1.5 mm.
+      final distance = ruler.measure(
+        meta,
+        (x: 0, y: 0),
+        (x: 0, y: 3),
+      );
+
+      expect(distance, closeTo(6.0, 0.01));
     });
 
     test('falls back to pixel distance when no spacing tag', () {

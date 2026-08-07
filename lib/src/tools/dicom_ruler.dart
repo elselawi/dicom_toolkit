@@ -32,7 +32,14 @@ class DicomRuler {
     return sqrt(dx * dx + dy * dy);
   }
 
-  /// Returns the pixel spacing row/col as a (x: row, y: col) pair.
+  /// Returns the pixel spacing as an (x, y) pair in image coordinates.
+  ///
+  /// In DICOM, Pixel Spacing (0028,0030) is encoded as
+  /// `[RowSpacing, ColumnSpacing]`, where "row" is the y-axis and "column"
+  /// is the x-axis. This method therefore maps row spacing to `y` (the
+  /// vertical/row axis) and column spacing to `x` (the horizontal/column
+  /// axis), so horizontal measurements use column spacing and vertical
+  /// measurements use row spacing.
   /// Checks Pixel Spacing (0028,0030) first, then Imager Pixel Spacing
   /// (0018,1164). Falls back to (1, 1) when neither is present.
   ({double x, double y}) _tryGetSpacing(final DicomMetadata metadata) {
@@ -48,6 +55,7 @@ class DicomRuler {
       return (x: 1, y: 1);
     }
 
-    return (x: row, y: col);
+    // x = columns → column spacing; y = rows → row spacing.
+    return (x: col, y: row);
   }
 }

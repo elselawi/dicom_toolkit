@@ -1,0 +1,19 @@
+# Auto-detect text files and perform LF normalization on checkin
+* text=auto
+
+# Shell scripts must always use LF line endings
+*.sh text eol=lf
+cargokit/run_build_tool.sh text eol=lf
+cargokit/build_pod.sh text eol=lf
+
+# Batch and PowerShell scripts
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.wasm binary
+*.dcm binary
+*.png binary
+*.jpg binary
+*.jpeg binary

@@ -10,7 +10,10 @@ param(
     [switch]$Release
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
+if (Test-Path Variable:PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 Push-Location $PSScriptRoot\..\rust
 
 $profile = if ($Release) { "--release" } else { "--dev" }

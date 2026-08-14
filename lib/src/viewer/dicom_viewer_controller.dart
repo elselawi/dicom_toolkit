@@ -125,16 +125,21 @@ class DicomViewerController extends ChangeNotifier {
           'result.isMonochrome=${_result!.isMonochrome} '
           'frameCount=${_result!.frameCount}');
       debugLog('[DART] controller: computing presets...');
-      // Auto-window to the full pixel range so the image is immediately visible
-      // regardless of modality. DICOM header window values are frequently
-      // missing or inappropriate for non-CT modalities (e.g. CR/DR X-ray).
-      final presets = DicomWindowPreset.forImage(_result!);
-      final defaultPreset = presets.firstWhere(
-        (final p) => p.label == 'Full Range',
-        orElse: () => presets.first,
-      );
-      _windowCenter = defaultPreset.center;
-      _windowWidth = defaultPreset.width;
+      if (_result!.isMonochrome) {
+        // Auto-window to the full pixel range so the image is immediately visible
+        // regardless of modality. DICOM header window values are frequently
+        // missing or inappropriate for non-CT modalities (e.g. CR/DR X-ray).
+        final presets = DicomWindowPreset.forImage(_result!);
+        final defaultPreset = presets.firstWhere(
+          (final p) => p.label == 'Full Range',
+          orElse: () => presets.first,
+        );
+        _windowCenter = defaultPreset.center;
+        _windowWidth = defaultPreset.width;
+      } else {
+        _windowCenter = _result!.metadata.windowCenter;
+        _windowWidth = _result!.metadata.windowWidth;
+      }
       debugLog('[DART] controller: window L=$_windowCenter W=$_windowWidth');
       debugLog(
           '[DART] controller: creating texture (hasShader=${_shader != null})...');

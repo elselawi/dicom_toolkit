@@ -64,6 +64,7 @@ class DicomShaderPainter extends CustomPainter {
     }
     final meta = result.metadata;
     final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
+    final isMonochrome = result.isMonochrome;
 
     // 1. Pass the canvas resolution to the shader
     shader.setFloat(0, size.width);
@@ -78,16 +79,19 @@ class DicomShaderPainter extends CustomPainter {
     shader.setFloat(5, meta.rescaleSlope);
 
     // 4. Pass the colorize toggle
-    shader.setFloat(6, colorize ? 1.0 : 0.0);
+    shader.setFloat(6, colorize && isMonochrome ? 1.0 : 0.0);
 
     // 5. Pass invert + MONOCHROME1 flags
     shader.setFloat(7, invert ? 1.0 : 0.0);
     shader.setFloat(8, isMonochrome1 ? 1.0 : 0.0);
 
-    // 6. Pass the actual image texture
+    // 6. Pass is_rgb flag (1.0 = RGB true color, 0.0 = 16-bit packed monochrome)
+    shader.setFloat(9, isMonochrome ? 0.0 : 1.0);
+
+    // 7. Pass the actual image texture
     shader.setImageSampler(0, rawTexture);
 
-    // 7. Pass the color LUT (or a dummy if grayscale — shader won't use it)
+    // 8. Pass the color LUT (or a dummy if grayscale — shader won't use it)
     if (colorLutTexture != null) {
       shader.setImageSampler(1, colorLutTexture!);
     } else {

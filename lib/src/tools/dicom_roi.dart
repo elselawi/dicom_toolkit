@@ -94,9 +94,24 @@ class DicomRoi {
 
     final buffer = pixels.buffer;
     final values = <double>[];
+    final isMonochrome = result.isMonochrome;
     for (var row = y0; row < y1; row++) {
       for (var col = x0; col < x1; col++) {
-        values.add(buffer[row * imgWidth + col].toDouble());
+        if (isMonochrome) {
+          final idx = row * imgWidth + col;
+          if (idx < buffer.length) {
+            values.add(buffer[idx].toDouble());
+          }
+        } else {
+          final idx = (row * imgWidth + col) * 3;
+          if (idx + 2 < buffer.length) {
+            final r = buffer[idx + 0];
+            final g = buffer[idx + 1];
+            final b = buffer[idx + 2];
+            final lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            values.add(lum);
+          }
+        }
       }
     }
 

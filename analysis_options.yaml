@@ -13,10 +13,11 @@
 
 include: package:lints/recommended.yaml
 
-exclude:
-  - "lib/src/rust/**"
-  - "cargokit/**"
-  - "example/**"
+analyzer:
+  exclude:
+    - "lib/src/rust/**"
+    - "cargokit/**"
+    - "example/**"
 
 # Specify additional rules.
 linter:

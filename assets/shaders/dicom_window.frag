@@ -8,6 +8,7 @@ uniform float u_rescale_slope;
 uniform float u_colorize;     // 1.0 = color, 0.0 = grayscale
 uniform float u_invert;       // 1.0 = invert grayscale
 uniform float u_monochrome1;  // 1.0 = MONOCHROME1 (invert automatically)
+uniform float u_is_rgb;       // 1.0 = direct RGB color image, 0.0 = 16-bit packed monochrome
 
 uniform sampler2D u_texture;
 uniform sampler2D u_color_lut; // 256×1 RGBA color lookup table
@@ -18,6 +19,15 @@ void main() {
     vec2 uv = FlutterFragCoord().xy / u_resolution;
 
     vec4 texColor = texture(u_texture, uv);
+
+    if (u_is_rgb > 0.5) {
+        vec3 rgb = texColor.rgb;
+        if (u_invert > 0.5) {
+            rgb = vec3(1.0) - rgb;
+        }
+        fragColor = vec4(rgb, 1.0);
+        return;
+    }
 
     // Unpack 16-bit value from R and G channels (stored as R=high, G=low)
     // We added 32768 offset in Dart to keep it positive.

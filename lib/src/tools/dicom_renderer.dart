@@ -85,8 +85,30 @@ class DicomRenderer {
     final height = pixelData.height;
     final pixelCount = width * height;
     final meta = result.metadata;
-    debugLog('[DART] createTexture: applyWindowing=$applyWindowing '
+    final isMonochrome = result.isMonochrome;
+    debugLog('[DART] createTexture: isMonochrome=$isMonochrome applyWindowing=$applyWindowing '
         'buffer.len=${data.length} w=$width h=$height pixelCount=$pixelCount');
+
+    if (!isMonochrome) {
+      // ── Color image (RGB / YBR): pack 24-bit RGB into RGBA ──
+      final rgbaData = packRgb(
+        data,
+        pixelCount,
+        invert: applyWindowing && _invert,
+        bitsStored: pixelData.bitsStored,
+      );
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        rgbaData,
+        width,
+        height,
+        ui.PixelFormat.rgba8888,
+        (final ui.Image img) {
+          completer.complete(img);
+        },
+      );
+      return completer.future;
+    }
 
     if (applyWindowing) {
       // ── CPU fallback (web): apply windowing in pure Dart ──
@@ -214,17 +236,50 @@ class DicomRenderer {
     final wc = windowCenter ?? meta.windowCenter;
     final ww = windowWidth ?? meta.windowWidth;
     final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
+    final isMonochrome = result.isMonochrome;
     final effectiveColorMap = colorMap ?? _colorMap;
     final effectiveInvert = invert ?? _invert;
     final rot = rotationSteps % 4;
 
-    final colorLut = effectiveColorMap == DicomColorMap.grayscale
+    final colorLut = effectiveColorMap == DicomColorMap.grayscale || !isMonochrome
         ? null
         : await _buildColorLutFor(effectiveColorMap);
 
     final s = await shader;
     if (s == null) {
-      // Web fallback: CPU windowing
+      // Web fallback: CPU windowing or direct texture
+      if (!isMonochrome) {
+        if (rot == 0 && !effectiveInvert) {
+          return texture;
+        }
+        if (effectiveInvert) {
+          final invTexture = await createTexture(
+            result,
+            applyWindowing: true,
+          );
+          if (rot == 0) return invTexture;
+          final recorder = ui.PictureRecorder();
+          final canvasW = rot.isOdd ? invTexture.height.toDouble() : invTexture.width.toDouble();
+          final canvasH = rot.isOdd ? invTexture.width.toDouble() : invTexture.height.toDouble();
+          final canvas = Canvas(recorder);
+          canvas.translate(canvasW / 2, canvasH / 2);
+          canvas.rotate(rot * 1.57079632679);
+          canvas.translate(-invTexture.width / 2, -invTexture.height / 2);
+          canvas.drawImage(invTexture, Offset.zero, Paint());
+          final picture = recorder.endRecording();
+          return picture.toImage(canvasW.toInt(), canvasH.toInt());
+        }
+        final recorder = ui.PictureRecorder();
+        final canvasW = rot.isOdd ? texture.height.toDouble() : texture.width.toDouble();
+        final canvasH = rot.isOdd ? texture.width.toDouble() : texture.height.toDouble();
+        final canvas = Canvas(recorder);
+        canvas.translate(canvasW / 2, canvasH / 2);
+        canvas.rotate(rot * 1.57079632679);
+        canvas.translate(-texture.width / 2, -texture.height / 2);
+        canvas.drawImage(texture, Offset.zero, Paint());
+        final picture = recorder.endRecording();
+        return picture.toImage(canvasW.toInt(), canvasH.toInt());
+      }
       return createTexture(
         result,
         windowCenter: wc,
@@ -242,9 +297,10 @@ class DicomRenderer {
     s.setFloat(3, ww);
     s.setFloat(4, meta.rescaleIntercept);
     s.setFloat(5, meta.rescaleSlope);
-    s.setFloat(6, colorLut != null ? 1.0 : 0.0);
+    s.setFloat(6, colorLut != null && isMonochrome ? 1.0 : 0.0);
     s.setFloat(7, effectiveInvert ? 1.0 : 0.0);
     s.setFloat(8, isMonochrome1 ? 1.0 : 0.0);
+    s.setFloat(9, isMonochrome ? 0.0 : 1.0);
     s.setImageSampler(0, texture);
     s.setImageSampler(1, colorLut ?? texture);
 
@@ -271,6 +327,40 @@ class DicomRenderer {
   void dispose() {
     _shader = null;
   }
+}
+
+/// Packs 8-bit or 16-bit RGB [pixels] (triplets [R, G, B, R, G, B...]) into an RGBA [Uint8List].
+///
+/// Each pixel maps 3 source channels (R, G, B) to 4 output bytes (R, G, B, A=255).
+/// If [invert] is true, inverts RGB values (255 - channel).
+/// [pixelCount] caps the number of pixels processed.
+Uint8List packRgb(
+  final List<int> pixels,
+  final int pixelCount, {
+  final bool invert = false,
+  final int bitsStored = 8,
+}) {
+  final rgbaData = Uint8List(pixelCount * 4);
+  final maxPixels =
+      pixelCount < (pixels.length ~/ 3) ? pixelCount : (pixels.length ~/ 3);
+  final shift = bitsStored > 8 ? bitsStored - 8 : 0;
+  for (var i = 0; i < maxPixels; i++) {
+    final src = i * 3;
+    final dst = i * 4;
+    var r = (pixels[src + 0] >> shift).clamp(0, 255);
+    var g = (pixels[src + 1] >> shift).clamp(0, 255);
+    var b = (pixels[src + 2] >> shift).clamp(0, 255);
+    if (invert) {
+      r = 255 - r;
+      g = 255 - g;
+      b = 255 - b;
+    }
+    rgbaData[dst + 0] = r;
+    rgbaData[dst + 1] = g;
+    rgbaData[dst + 2] = b;
+    rgbaData[dst + 3] = 255;
+  }
+  return rgbaData;
 }
 
 /// Applies window-center/window-width rescaling (with the Hounsfield slope /

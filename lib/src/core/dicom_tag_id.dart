@@ -119,6 +119,9 @@ class DicomTagId {
   /// Samples per Pixel (0028,0002).
   static const samplesPerPixel = DicomTagId.fromParts(0x0028, 0x0002);
 
+  /// Planar Configuration (0028,0006).
+  static const planarConfiguration = DicomTagId.fromParts(0x0028, 0x0006);
+
   /// Bits Allocated (0028,0100).
   static const bitsAllocated = DicomTagId.fromParts(0x0028, 0x0100);
 

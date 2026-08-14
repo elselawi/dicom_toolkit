@@ -1,4 +1,8 @@
-import 'package:dicom_toolkit/src/tools/dicom_renderer.dart';
+import 'dart:typed_data';
+
+import 'package:dicom_toolkit/dicom_toolkit.dart';
+import 'package:dicom_toolkit/src/rust/api/core/models/dicom_metadata.dart'
+    as generated;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -152,6 +156,108 @@ void main() {
       expect(out[0], 128);
       expect(out[4], 128);
       expect(out[8], 128);
+    });
+  });
+
+  group('packRgb', () {
+    test('packs RGB triplets into RGBA bytes with opaque alpha', () {
+      // 2 RGB pixels: (255, 0, 128), (10, 20, 30)
+      final out = packRgb([255, 0, 128, 10, 20, 30], 2);
+      expect(out.length, 8);
+      expect(out[0], 255); // R0
+      expect(out[1], 0);   // G0
+      expect(out[2], 128); // B0
+      expect(out[3], 255); // A0
+      expect(out[4], 10);  // R1
+      expect(out[5], 20);  // G1
+      expect(out[6], 30);  // B1
+      expect(out[7], 255); // A1
+    });
+
+    test('supports invert option', () {
+      final out = packRgb([255, 0, 100], 1, invert: true);
+      expect(out[0], 0);   // 255 - 255
+      expect(out[1], 255); // 255 - 0
+      expect(out[2], 155); // 255 - 100
+      expect(out[3], 255); // Alpha stays 255
+    });
+
+    test('supports 16-bit to 8-bit downscaling', () {
+      final out = packRgb([65535, 32768, 0], 1, bitsStored: 16);
+      expect(out[0], 255); // 65535 >> 8
+      expect(out[1], 128); // 32768 >> 8
+      expect(out[2], 0);
+      expect(out[3], 255);
+    });
+
+    test('does not over-read shorter pixel buffer', () {
+      final out = packRgb([255, 128, 0], 4);
+      expect(out.length, 16);
+      expect(out[0], 255);
+      expect(out[1], 128);
+      expect(out[2], 0);
+      expect(out[3], 255);
+      // Unwritten pixels stay 0
+      expect(out[4], 0);
+      expect(out[7], 0);
+    });
+  });
+
+  group('DicomRenderer.createTexture with RGB data', () {
+    test('creates texture from RGB pixel data', () async {
+      const inner = generated.DicomMetadata(
+        patientId: 'P001',
+        patientName: 'Test',
+        studyDate: '20240101',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+        studyDescription: 'Study',
+        modality: 'OPT',
+        manufacturer: 'Mfr',
+        manufacturerModelName: 'Model',
+        institutionName: 'Hosp',
+        studyInstanceUid: '1.2.3',
+        seriesInstanceUid: '1.2.3.1',
+        sopInstanceUid: '1.2.3.1.1',
+        seriesDescription: 'Series',
+        bodyPartExamined: 'EYE',
+        toothInfo: 'Unknown',
+        sliceThickness: 1.0,
+        instanceNumber: '1',
+        photometricInterpretation: 'RGB',
+        width: 2,
+        height: 2,
+        windowCenter: 127.5,
+        windowWidth: 255.0,
+        rescaleIntercept: 0.0,
+        rescaleSlope: 1.0,
+        samplesPerPixel: 3,
+        bitsAllocated: 8,
+        bitsStored: 8,
+        highBit: 7,
+        pixelRepresentation: 0,
+        pixelSpacing: '',
+        imagePositionPatient: '',
+        sliceLocation: 0.0,
+        spacingBetweenSlices: 0.0,
+        imageOrientationPatient: '',
+        numberOfFrames: 1,
+      );
+      final pixels = Int16List.fromList([
+        255, 0, 0,    // (0,0) Red
+        0, 255, 0,    // (1,0) Green
+        0, 0, 255,    // (0,1) Blue
+        255, 255, 255 // (1,1) White
+      ]);
+      final frame = DicomFrameResult(metadata: inner, pixelData: pixels);
+      final result = DicomParseResult.fromFrame(frame: frame);
+
+      final renderer = DicomRenderer();
+      final texture = await renderer.createTexture(result);
+
+      expect(texture.width, 2);
+      expect(texture.height, 2);
     });
   });
 }

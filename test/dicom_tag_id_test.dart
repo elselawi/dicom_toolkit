@@ -141,6 +141,7 @@ void main() {
       expect(DicomTagId.width.group, 0x0028);
       expect(DicomTagId.height.group, 0x0028);
       expect(DicomTagId.samplesPerPixel.group, 0x0028);
+      expect(DicomTagId.planarConfiguration.group, 0x0028);
       expect(DicomTagId.bitsAllocated.group, 0x0028);
       expect(DicomTagId.bitsStored.group, 0x0028);
       expect(DicomTagId.highBit.group, 0x0028);
@@ -161,7 +162,7 @@ void main() {
       expect(DicomTagId.rescaleSlope.group, 0x0028);
     });
 
-    test('all 39 constants are distinct', () {
+    test('all 40 constants are distinct', () {
       const all = <DicomTagId>[
         // Patient & Study
         DicomTagId.patientName,
@@ -192,6 +193,7 @@ void main() {
         DicomTagId.width,
         DicomTagId.height,
         DicomTagId.samplesPerPixel,
+        DicomTagId.planarConfiguration,
         DicomTagId.bitsAllocated,
         DicomTagId.bitsStored,
         DicomTagId.highBit,
@@ -212,7 +214,7 @@ void main() {
         DicomTagId.rescaleSlope,
       ];
       final set = all.toSet();
-      expect(set.length, 39);
+      expect(set.length, 40);
     });
   });
 }

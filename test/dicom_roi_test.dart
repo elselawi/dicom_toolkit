@@ -199,4 +199,60 @@ void main() {
       expect(str, contains('n=2'));
     });
   });
+
+  group('DicomRoi with color images (samplesPerPixel == 3)', () {
+    test('computes luminance statistics across RGB pixels', () {
+      // 1x2 image: P0 = (R=255, G=0, B=0) -> lum ≈ 0.299 * 255 = 76.245
+      //            P1 = (R=0, G=255, B=0) -> lum ≈ 0.587 * 255 = 149.685
+      const inner = generated.DicomMetadata(
+        patientId: 'P001',
+        patientName: 'Test',
+        studyDate: '20240101',
+        seriesDate: 'Unknown',
+        acquisitionDate: 'Unknown',
+        contentDate: 'Unknown',
+        studyDescription: 'Study',
+        modality: 'OPT',
+        manufacturer: 'Mfr',
+        manufacturerModelName: 'Model',
+        institutionName: 'Hosp',
+        studyInstanceUid: '1.2.3',
+        seriesInstanceUid: '1.2.3.1',
+        sopInstanceUid: '1.2.3.1.1',
+        seriesDescription: 'Series',
+        bodyPartExamined: 'EYE',
+        toothInfo: 'Unknown',
+        sliceThickness: 1.0,
+        instanceNumber: '1',
+        photometricInterpretation: 'RGB',
+        width: 2,
+        height: 1,
+        windowCenter: 127.5,
+        windowWidth: 255.0,
+        rescaleIntercept: 0.0,
+        rescaleSlope: 1.0,
+        samplesPerPixel: 3,
+        bitsAllocated: 8,
+        bitsStored: 8,
+        highBit: 7,
+        pixelRepresentation: 0,
+        pixelSpacing: '',
+        imagePositionPatient: '',
+        sliceLocation: 0.0,
+        spacingBetweenSlices: 0.0,
+        imageOrientationPatient: '',
+        numberOfFrames: 1,
+      );
+      final pixels = Int16List.fromList([255, 0, 0, 0, 255, 0]);
+      final frame = DicomFrameResult(metadata: inner, pixelData: pixels);
+      final result = DicomParseResult.fromFrame(frame: frame);
+
+      const roi = DicomRoi(x: 0, y: 0, width: 2, height: 1);
+      final stats = roi.compute(result);
+
+      expect(stats.pixelCount, 2);
+      expect(stats.min, closeTo(76.245, 0.01));
+      expect(stats.max, closeTo(149.685, 0.01));
+    });
+  });
 }

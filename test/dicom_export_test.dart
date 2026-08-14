@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:async';
 
 import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:dicom_toolkit/src/rust/api/core/models/dicom_metadata.dart'
@@ -55,6 +55,57 @@ DicomParseResult _buildResult() {
   return DicomParseResult.fromFrame(frame: frame);
 }
 
+/// Builds an RGB color [DicomParseResult] (2×2 pixels).
+DicomParseResult _buildColorResult() {
+  const inner = generated.DicomMetadata(
+    patientId: 'P002',
+    patientName: 'ColorTest',
+    studyDate: '20240101',
+    seriesDate: 'Unknown',
+    acquisitionDate: 'Unknown',
+    contentDate: 'Unknown',
+    studyDescription: 'Retinal Fundus',
+    modality: 'OPT',
+    manufacturer: 'Mfr',
+    manufacturerModelName: 'Model',
+    institutionName: 'Eye Clinic',
+    studyInstanceUid: '1.2.3',
+    seriesInstanceUid: '1.2.3.1',
+    sopInstanceUid: '1.2.3.1.2',
+    seriesDescription: 'Fundus',
+    bodyPartExamined: 'EYE',
+    toothInfo: 'Unknown',
+    sliceThickness: 1.0,
+    instanceNumber: '1',
+    photometricInterpretation: 'RGB',
+    width: 2,
+    height: 2,
+    windowCenter: 127.5,
+    windowWidth: 255.0,
+    rescaleIntercept: 0.0,
+    rescaleSlope: 1.0,
+    samplesPerPixel: 3,
+    bitsAllocated: 8,
+    bitsStored: 8,
+    highBit: 7,
+    pixelRepresentation: 0,
+    pixelSpacing: '',
+    imagePositionPatient: '',
+    sliceLocation: 0.0,
+    spacingBetweenSlices: 0.0,
+    imageOrientationPatient: '',
+    numberOfFrames: 1,
+  );
+  final frame = DicomFrameResult(
+    metadata: inner,
+    pixelData: Int16List.fromList([
+      255, 0, 0, 0, 255, 0,
+      0, 0, 255, 255, 255, 255,
+    ]),
+  );
+  return DicomParseResult.fromFrame(frame: frame);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -91,10 +142,31 @@ void main() {
       }
     });
 
+    test('exports RGB color DICOM image to PNG with correct dimensions', () async {
+      const exporter = DicomExport();
+      final pngBytes = await exporter.toPngBytes(_buildColorResult());
+
+      const magic = [137, 80, 78, 71, 13, 10, 26, 10];
+      expect(pngBytes.length, greaterThan(magic.length));
+      for (var i = 0; i < magic.length; i++) {
+        expect(pngBytes[i], magic[i]);
+      }
+
+      final decodeCompleter = Completer<ui.Image>();
+      ui.decodeImageFromList(pngBytes, decodeCompleter.complete);
+      final decoded = await decodeCompleter.future;
+      try {
+        expect(decoded.width, 2);
+        expect(decoded.height, 2);
+      } finally {
+        decoded.dispose();
+      }
+    });
+
     test('disposes the image and rethrows when encoding returns null',
         () async {
       final exporter = DicomExport(
-        encodePng: (image) async => null,
+        encodePng: (final image) async => null,
       );
       await expectLater(
         exporter.toPngBytes(_buildResult()),
@@ -104,7 +176,7 @@ void main() {
 
     test('disposes the image and rethrows when encoding throws', () async {
       final exporter = DicomExport(
-        encodePng: (image) async => throw Exception('encode boom'),
+        encodePng: (final image) async => throw Exception('encode boom'),
       );
       await expectLater(
         exporter.toPngBytes(_buildResult()),

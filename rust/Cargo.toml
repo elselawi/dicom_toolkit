@@ -3,6 +3,12 @@ name = "dicom_toolkit"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
 [lib]
 crate-type = ["cdylib", "staticlib"]
 

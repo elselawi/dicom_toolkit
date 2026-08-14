@@ -138,6 +138,11 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         tags::SAMPLES_PER_PIXEL,
         default_meta.samples_per_pixel,
     );
+    let planar_configuration = get_int_tag(
+        &obj,
+        tags::PLANAR_CONFIGURATION,
+        0u16,
+    );
     let bits_allocated = get_int_tag(&obj, tags::BITS_ALLOCATED, default_meta.bits_allocated);
     let bits_stored = get_int_tag(&obj, tags::BITS_STORED, default_meta.bits_stored);
     let high_bit = get_int_tag(&obj, tags::HIGH_BIT, default_meta.high_bit);
@@ -196,7 +201,7 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
         tooth_info,
         slice_thickness,
         instance_number,
-        photometric_interpretation,
+        photometric_interpretation: photometric_interpretation.clone(),
         width,
         height,
         window_center,
@@ -266,8 +271,50 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
                         } else {
                             raw_slice
                         };
-                        pixel_data = convert_pixels(
-                            first_frame, bits_allocated, pixel_representation);
+
+                        if photometric_interpretation == "PALETTE COLOR" {
+                            if let Some(palette_pixels) = try_expand_palette_color(&obj, first_frame) {
+                                pixel_data = palette_pixels;
+                                metadata.samples_per_pixel = 3;
+                                metadata.photometric_interpretation = "RGB".to_string();
+                            }
+                        }
+
+                        if pixel_data.is_empty() {
+                            if samples_per_pixel == 3 {
+                                let mut color_bytes = if planar_configuration == 1 {
+                                    if bits_allocated <= 8 {
+                                        interleave_planes_u8(first_frame)
+                                    } else {
+                                        interleave_planes_u16(first_frame)
+                                    }
+                                } else {
+                                    first_frame.to_vec()
+                                };
+
+                                match photometric_interpretation.as_str() {
+                                    "YBR_FULL" => {
+                                        convert_ybr_full_to_rgb_u8(&mut color_bytes);
+                                        metadata.photometric_interpretation = "RGB".to_string();
+                                    }
+                                    "YBR_FULL_422" => {
+                                        color_bytes = convert_ybr_full_422_to_rgb_u8(&color_bytes);
+                                        metadata.photometric_interpretation = "RGB".to_string();
+                                    }
+                                    "YBR_PARTIAL_422" => {
+                                        color_bytes = convert_ybr_partial_422_to_rgb_u8(&color_bytes);
+                                        metadata.photometric_interpretation = "RGB".to_string();
+                                    }
+                                    _ => {}
+                                }
+
+                                pixel_data = convert_pixels(
+                                    &color_bytes, bits_allocated, pixel_representation);
+                            } else {
+                                pixel_data = convert_pixels(
+                                    first_frame, bits_allocated, pixel_representation);
+                            }
+                        }
                     }
                 }
             }
@@ -281,18 +328,58 @@ fn process_dicom_object(obj: DefaultDicomObject, config: &DicomConfig) -> Result
             #[cfg(debug_assertions)]
             eprintln!("[RUST] PATH1 empty (is_encapsulated={}), falling back to PATH2...", is_encapsulated);
             if let Ok(decoded) = obj.decode_pixel_data() {
+                let decoded_spp = decoded.samples_per_pixel();
+                let decoded_bits = decoded.bits_allocated();
+                let decoded_bytes_per_sample = (decoded_bits as usize).div_ceil(8);
+                let decoded_frame_samples = (width as usize) * (height as usize) * (decoded_spp as usize);
+                let decoded_frame_bytes = decoded_frame_samples * decoded_bytes_per_sample;
+
                 let raw_bytes = decoded.data();
                 #[cfg(debug_assertions)]
-                eprintln!("[RUST] PATH2 decoded {} bytes, keeping first {} frame_bytes",
-                    raw_bytes.len(), frame_bytes);
-                if !raw_bytes.is_empty() && frame_bytes > 0 {
-                    let first_frame = if raw_bytes.len() > frame_bytes {
-                        &raw_bytes[..frame_bytes]
+                eprintln!("[RUST] PATH2 decoded {} bytes, keeping first {} frame_bytes, decoded_spp={}, decoded_bits={}",
+                    raw_bytes.len(), decoded_frame_bytes, decoded_spp, decoded_bits);
+                if !raw_bytes.is_empty() && decoded_frame_bytes > 0 {
+                    let first_frame = if raw_bytes.len() > decoded_frame_bytes {
+                        &raw_bytes[..decoded_frame_bytes]
                     } else {
                         raw_bytes
                     };
-                    pixel_data = convert_pixels(
-                        first_frame, bits_allocated, pixel_representation);
+
+                    if decoded_spp == 3 {
+                        let is_planar = (decoded.planar_configuration() as u16) == 1;
+                        let mut color_bytes = if is_planar {
+                            if decoded_bits <= 8 {
+                                interleave_planes_u8(first_frame)
+                            } else {
+                                interleave_planes_u16(first_frame)
+                            }
+                        } else {
+                            first_frame.to_vec()
+                        };
+
+                        let pi_str = decoded.photometric_interpretation().as_ref();
+                        match pi_str {
+                            "YBR_FULL" => {
+                                convert_ybr_full_to_rgb_u8(&mut color_bytes);
+                            }
+                            "YBR_FULL_422" => {
+                                color_bytes = convert_ybr_full_422_to_rgb_u8(&color_bytes);
+                            }
+                            "YBR_PARTIAL_422" => {
+                                color_bytes = convert_ybr_partial_422_to_rgb_u8(&color_bytes);
+                            }
+                            _ => {}
+                        }
+
+                        metadata.samples_per_pixel = 3;
+                        metadata.photometric_interpretation = "RGB".to_string();
+                        pixel_data = convert_pixels(
+                            &color_bytes, decoded_bits, pixel_representation);
+                    } else {
+                        metadata.samples_per_pixel = decoded_spp;
+                        pixel_data = convert_pixels(
+                            first_frame, decoded_bits, pixel_representation);
+                    }
                 }
             } else {
                 #[cfg(debug_assertions)]
@@ -416,6 +503,147 @@ fn convert_pixels(bytes: &[u8], bits_allocated: u16, pixel_representation: u16) 
     }
 }
 
+/// Interleaves color-by-plane (planar configuration 1) 8-bit data into color-by-pixel RGB.
+fn interleave_planes_u8(data: &[u8]) -> Vec<u8> {
+    if data.len() % 3 != 0 {
+        return data.to_vec();
+    }
+    let plane_len = data.len() / 3;
+    let r = &data[..plane_len];
+    let g = &data[plane_len..2 * plane_len];
+    let b = &data[2 * plane_len..];
+    let mut out = Vec::with_capacity(data.len());
+    for i in 0..plane_len {
+        out.push(r[i]);
+        out.push(g[i]);
+        out.push(b[i]);
+    }
+    out
+}
+
+/// Interleaves color-by-plane (planar configuration 1) 16-bit data into color-by-pixel RGB.
+fn interleave_planes_u16(data: &[u8]) -> Vec<u8> {
+    if data.len() % 6 != 0 {
+        return data.to_vec();
+    }
+    let samples_per_plane = data.len() / 6;
+    let bytes_per_plane = samples_per_plane * 2;
+    let r = &data[..bytes_per_plane];
+    let g = &data[bytes_per_plane..2 * bytes_per_plane];
+    let b = &data[2 * bytes_per_plane..];
+    let mut out = Vec::with_capacity(data.len());
+    for i in 0..samples_per_plane {
+        out.push(r[2 * i]);
+        out.push(r[2 * i + 1]);
+        out.push(g[2 * i]);
+        out.push(g[2 * i + 1]);
+        out.push(b[2 * i]);
+        out.push(b[2 * i + 1]);
+    }
+    out
+}
+
+/// Converts YBR_FULL 8-bit triplets into RGB 8-bit triplets in-place.
+fn convert_ybr_full_to_rgb_u8(data: &mut [u8]) {
+    for chunk in data.chunks_exact_mut(3) {
+        let y = chunk[0] as f32;
+        let cb = chunk[1] as f32 - 128.0;
+        let cr = chunk[2] as f32 - 128.0;
+
+        let r = (y + 1.402 * cr).clamp(0.0, 255.0);
+        let g = (y - 0.344136 * cb - 0.714136 * cr).clamp(0.0, 255.0);
+        let b = (y + 1.772 * cb).clamp(0.0, 255.0);
+
+        chunk[0] = r.round() as u8;
+        chunk[1] = g.round() as u8;
+        chunk[2] = b.round() as u8;
+    }
+}
+
+/// Converts YBR_FULL_422 8-bit data (Y1, Y2, Cb, Cr) into RGB 8-bit triplets.
+fn convert_ybr_full_422_to_rgb_u8(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity((data.len() / 4) * 6);
+    for chunk in data.chunks_exact(4) {
+        let y1 = chunk[0] as f32;
+        let y2 = chunk[1] as f32;
+        let cb = chunk[2] as f32 - 128.0;
+        let cr = chunk[3] as f32 - 128.0;
+
+        let r1 = (y1 + 1.402 * cr).clamp(0.0, 255.0).round() as u8;
+        let g1 = (y1 - 0.344136 * cb - 0.714136 * cr).clamp(0.0, 255.0).round() as u8;
+        let b1 = (y1 + 1.772 * cb).clamp(0.0, 255.0).round() as u8;
+
+        let r2 = (y2 + 1.402 * cr).clamp(0.0, 255.0).round() as u8;
+        let g2 = (y2 - 0.344136 * cb - 0.714136 * cr).clamp(0.0, 255.0).round() as u8;
+        let b2 = (y2 + 1.772 * cb).clamp(0.0, 255.0).round() as u8;
+
+        out.extend_from_slice(&[r1, g1, b1, r2, g2, b2]);
+    }
+    out
+}
+
+/// Converts YBR_PARTIAL_422 8-bit data into RGB 8-bit triplets.
+fn convert_ybr_partial_422_to_rgb_u8(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity((data.len() / 4) * 6);
+    for chunk in data.chunks_exact(4) {
+        let y1 = (chunk[0] as f32 - 16.0) * (255.0 / 219.0);
+        let y2 = (chunk[1] as f32 - 16.0) * (255.0 / 219.0);
+        let cb = (chunk[2] as f32 - 128.0) * (255.0 / 224.0);
+        let cr = (chunk[3] as f32 - 128.0) * (255.0 / 224.0);
+
+        let r1 = (y1 + 1.402 * cr).clamp(0.0, 255.0).round() as u8;
+        let g1 = (y1 - 0.344136 * cb - 0.714136 * cr).clamp(0.0, 255.0).round() as u8;
+        let b1 = (y1 + 1.772 * cb).clamp(0.0, 255.0).round() as u8;
+
+        let r2 = (y2 + 1.402 * cr).clamp(0.0, 255.0).round() as u8;
+        let g2 = (y2 - 0.344136 * cb - 0.714136 * cr).clamp(0.0, 255.0).round() as u8;
+        let b2 = (y2 + 1.772 * cb).clamp(0.0, 255.0).round() as u8;
+
+        out.extend_from_slice(&[r1, g1, b1, r2, g2, b2]);
+    }
+    out
+}
+
+/// Checks and applies PALETTE COLOR LUT expansion if present.
+fn try_expand_palette_color(
+    obj: &DefaultDicomObject,
+    indices: &[u8],
+) -> Option<Vec<i16>> {
+    let red_data = obj.element(tags::RED_PALETTE_COLOR_LOOKUP_TABLE_DATA).ok()?.to_bytes().ok()?;
+    let green_data = obj.element(tags::GREEN_PALETTE_COLOR_LOOKUP_TABLE_DATA).ok()?.to_bytes().ok()?;
+    let blue_data = obj.element(tags::BLUE_PALETTE_COLOR_LOOKUP_TABLE_DATA).ok()?.to_bytes().ok()?;
+
+    let red_desc_elem = obj.element(tags::RED_PALETTE_COLOR_LOOKUP_TABLE_DESCRIPTOR).ok()?;
+    let num_entries = red_desc_elem.to_int::<u32>().ok().unwrap_or(256);
+    let num_entries = if num_entries == 0 { 65536 } else { num_entries as usize };
+
+    let r_slice = red_data.as_ref();
+    let g_slice = green_data.as_ref();
+    let b_slice = blue_data.as_ref();
+
+    let is_16bit_lut = r_slice.len() >= num_entries * 2;
+
+    let mut out = Vec::with_capacity(indices.len() * 3);
+    for &idx_byte in indices {
+        let idx = idx_byte as usize;
+        let (r, g, b) = if is_16bit_lut {
+            let r_val = if idx * 2 + 1 < r_slice.len() { u16::from_le_bytes([r_slice[idx * 2], r_slice[idx * 2 + 1]]) >> 8 } else { 0 };
+            let g_val = if idx * 2 + 1 < g_slice.len() { u16::from_le_bytes([g_slice[idx * 2], g_slice[idx * 2 + 1]]) >> 8 } else { 0 };
+            let b_val = if idx * 2 + 1 < b_slice.len() { u16::from_le_bytes([b_slice[idx * 2], b_slice[idx * 2 + 1]]) >> 8 } else { 0 };
+            (r_val as i16, g_val as i16, b_val as i16)
+        } else {
+            let r_val = if idx < r_slice.len() { r_slice[idx] } else { 0 };
+            let g_val = if idx < g_slice.len() { g_slice[idx] } else { 0 };
+            let b_val = if idx < b_slice.len() { b_slice[idx] } else { 0 };
+            (r_val as i16, g_val as i16, b_val as i16)
+        };
+        out.push(r);
+        out.push(g);
+        out.push(b);
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -522,5 +750,42 @@ mod tests {
         // Zero/absent window width means no windowing metadata to align.
         assert_eq!(align_window_center(0, 16, 0.0, 32768.0), 32768.0);
         assert_eq!(align_window_center(0, 16, -1.0, 32768.0), 32768.0);
+    }
+
+    // ── Color processing: interleaving & YBR->RGB conversions ────
+
+    #[test]
+    fn interleaves_planar_u8_correctly() {
+        // 2 pixels: P0 = (R0=10, G0=20, B0=30), P1 = (R1=40, G1=50, B1=60)
+        // Planar format: [10, 40, 20, 50, 30, 60]
+        let planar = vec![10, 40, 20, 50, 30, 60];
+        let interleaved = interleave_planes_u8(&planar);
+        assert_eq!(interleaved, vec![10, 20, 30, 40, 50, 60]);
+    }
+
+    #[test]
+    fn converts_ybr_full_to_rgb_correctly() {
+        // Pure gray: Y=128, Cb=128, Cr=128 -> RGB should be ~ (128, 128, 128)
+        let mut data = vec![128, 128, 128];
+        convert_ybr_full_to_rgb_u8(&mut data);
+        assert_eq!(data, vec![128, 128, 128]);
+
+        // Pure white: Y=255, Cb=128, Cr=128 -> RGB should be ~ (255, 255, 255)
+        let mut white = vec![255, 128, 128];
+        convert_ybr_full_to_rgb_u8(&mut white);
+        assert_eq!(white, vec![255, 255, 255]);
+
+        // Pure black: Y=0, Cb=128, Cr=128 -> RGB should be (0, 0, 0)
+        let mut black = vec![0, 128, 128];
+        convert_ybr_full_to_rgb_u8(&mut black);
+        assert_eq!(black, vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn converts_ybr_full_422_to_rgb_correctly() {
+        // 2 pixels in 4:2:2: Y1=128, Y2=255, Cb=128, Cr=128
+        let data = vec![128, 255, 128, 128];
+        let rgb = convert_ybr_full_422_to_rgb_u8(&data);
+        assert_eq!(rgb, vec![128, 128, 128, 255, 255, 255]);
     }
 }

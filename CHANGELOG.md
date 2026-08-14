@@ -1,3 +1,13 @@
+## 0.2.9
+
+- **(feat)** Added `DicomTagId.planarConfiguration` constant and `u_is_rgb` shader support for true-color images.
+- **(fix)** Android build failure caused by CRLF line endings in `cargokit/run_build_tool.sh` (issue #1). Normalized all shell scripts to LF and added root `.gitattributes` to enforce LF on checkouts and packaging.
+- **(fix)** Color DICOM rendering corruption for RGB, YBR, and palette color images (issue #2).
+  - Rust engine now handles planar configuration 1 (interleaving planar channels into RGB triplets) and color conversion for `YBR_FULL`, `YBR_FULL_422`, `YBR_PARTIAL_422`, and `PALETTE COLOR`.
+  - Dart renderer packs RGB triplets directly into 32-bit RGBA texture data via `packRgb()`.
+  - Shader and CPU fallback now render true-color pixels directly without grayscale windowing distortion.
+- **(test)** Added test coverage for RGB pixel packing, color texture creation, color ROI luminance calculation, and color PNG export.
+
 ## 0.2.8
 
 - **(fix)** `DicomMetadata.pixelSpacingX`/`pixelSpacingY` now map DICOM row/column

@@ -1,8 +1,33 @@
 /// This is copied from Cargokit (which is the official way to use it currently)
 /// Details: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
+///
+/// ---------------------------------------------------------------------------------------
+/// LOCAL PATCH — this file is NOT identical to upstream any more. Do not blindly re-copy.
+/// ---------------------------------------------------------------------------------------
+///
+/// Upstream:   https://github.com/fzyzcjy/cargokit — the maintained fork of the archived
+///             https://github.com/irondash/cargokit. flutter_rust_bridge's `integrate`
+///             backend vendors it as the git submodule
+///             `frb_codegen/assets/integration_template/cargokit/plugin/cargokit`
+///             (see the .gitmodules of fzyzcjy/flutter_rust_bridge).
+/// Baseline:   the submodule revision shipped with flutter_rust_bridge 2.12.0. Diffing that
+///             baseline against upstream main (fzyzcjy/cargokit@6f7144d192b04075acd73af2656cdebb1d3e4055,
+///             the submodule pointer of fzyzcjy/flutter_rust_bridge master at the time of
+///             writing) shows the upstream side already carries deviation A2
+///             (`ExecOperations`) but still uses `project.buildDir`.
+///
+/// Local deviations, so a future sync can rebase instead of re-copying:
+///
+///   Tier A — Gradle 9 compatibility (Gradle 9 removed `Project.buildDir` and `Project.exec`):
+///     A1. `project.buildDir`     -> `project.layout.buildDirectory.get().asFile`
+///     A2. `project.exec { }`     -> injected `org.gradle.process.ExecOperations`
+///
+/// ---------------------------------------------------------------------------------------
 
 import java.nio.file.Paths
+import javax.inject.Inject
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.process.ExecOperations
 
 CargoKitPlugin.file = buildscript.sourceFile
 
@@ -14,6 +39,11 @@ class CargoKitExtension {
 }
 
 abstract class CargoKitBuildTask extends DefaultTask {
+
+    // Gradle 9 removed `Project.exec`; process execution must go through the
+    // `ExecOperations` service (deviation A2).
+    @Inject
+    abstract ExecOperations getExecOperations()
 
     @Input
     String buildMode
@@ -60,12 +90,12 @@ abstract class CargoKitBuildTask extends DefaultTask {
         def rootProjectDir = project.rootProject.projectDir
 
         if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
-            project.exec {
+            execOperations.exec {
                 commandLine 'chmod', '+x', path
             }
         }
 
-        project.exec {
+        execOperations.exec {
             executable path
             args "build-gradle"
             environment "CARGOKIT_ROOT_PROJECT_DIR", rootProjectDir
@@ -118,7 +148,12 @@ class CargoKitPlugin implements Plugin<Project> {
             return;
         }
 
-        def cargoBuildDir = "${project.buildDir}/build"
+        // Gradle 9 removed `Project.buildDir` (deviation A1). Reading the directory property
+        // is safe here: the root build script redirects `layout.buildDirectory` for every
+        // subproject during the root project's evaluation, which always happens before this
+        // module is configured.
+        def buildDirectory = project.layout.buildDirectory
+        def cargoBuildDir = "${buildDirectory.get().asFile}/build"
 
         // Determine if the project is an application or library
         def isApplication = plugin.project.plugins.hasPlugin('com.android.application')
@@ -128,7 +163,7 @@ class CargoKitPlugin implements Plugin<Project> {
 
             final buildType = variant.buildType.name
 
-            def cargoOutputDir = "${project.buildDir}/jniLibs/${buildType}";
+            def cargoOutputDir = "${buildDirectory.get().asFile}/jniLibs/${buildType}";
             def jniLibs = project.android.sourceSets.maybeCreate(buildType).jniLibs;
             jniLibs.srcDir(new File(cargoOutputDir))
 

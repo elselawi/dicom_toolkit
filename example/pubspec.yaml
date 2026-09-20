@@ -34,7 +34,7 @@ dependencies:
   dicom_toolkit:
     path: ../
 
-  file_picker: ^11.0.2
+  file_picker: ^13.1.0
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

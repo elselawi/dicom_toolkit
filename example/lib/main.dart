@@ -116,11 +116,12 @@ class _ToolkitScreenState extends State<ToolkitScreen> {
   }
 
   Future<void> _pickFile() async {
-    final result =
-        await FilePicker.pickFiles(type: FileType.any, withData: true);
-    final file = result?.files.single;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
+    // file_picker >= 12 returns the picked files directly (there is no
+    // `FilePickerResult` wrapper any more) and reads bytes lazily.
+    final files = await FilePicker.pickFiles(type: FileType.any);
+    if (files.isEmpty) return;
+    final file = files.single;
+    final bytes = await file.readAsBytes();
     await _loadBytes(bytes, name: file.name);
   }
 

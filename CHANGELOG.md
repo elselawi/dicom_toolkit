@@ -54,7 +54,7 @@
   [`fzyzcjy/cargokit`](https://github.com/fzyzcjy/cargokit) (the maintained fork of the
   archived `irondash/cargokit`) so future syncs rebase instead of re-copying.
 
-### Example app + CI
+### Example app
 
 - **(build)** `example/android` regenerated from the Flutter 3.47 template: Gradle 9.3.1,
   AGP 9.1.0, Kotlin 2.4.0, `android.newDsl=false` + `android.builtInKotlin=false`,
@@ -64,10 +64,9 @@
   Plugin and its `FilePickerPlugin` is never compiled under AGP 9 — even in a stock app with
   no dicom_toolkit involved (`cannot find symbol: class FilePickerPlugin`). 13.x also removed
   the `FilePickerResult` wrapper, so the picker call site was updated.
-- **(ci)** New GitHub Actions workflow with four jobs: analyze + `flutter test` +
-  `flutter pub publish --dry-run`; the example app on Flutter 3.47 defaults; a consumer app
-  pinned to AGP 8.13.1/Gradle 8.14/JDK 17 that **fails on AGP deprecation warnings**; and an
-  `android.newDsl=true` probe.
+- **(tool)** `tool/agp_newdsl_probe.dart` — builds a plain AGP app against `android/` with
+  `android.newDsl=true` and asserts `libdicom_toolkit.so` is packaged. Local verification
+  tool; there is no CI.
 
 ### Known limitation: `android.newDsl=true` in a Flutter app
 
@@ -76,11 +75,9 @@ not a dicom_toolkit problem: Flutter's own Gradle plugin casts the AGP extension
 `com.android.build.gradle.AbstractAppExtension` (`FlutterPlugin.kt:354`, called from
 `FlutterPlugin.apply`) and Flutter responds to the resulting `ClassCastException` with its own
 Flutter Fix: *"To resolve this update flutter or opt out of `android.newDsl`."* No
-dicom_toolkit code runs before that point. CI therefore verifies the new DSL with
-`.github/scripts/agp_newdsl_probe.dart`, which builds a plain AGP app applying a stub Flutter
-plugin against the real module and asserts that `libdicom_toolkit.so` is packaged; the
-app-level check runs in the same job and turns green automatically once Flutter supports the
-flag.
+dicom_toolkit code runs before that point. The new DSL is therefore verified locally with
+`tool/agp_newdsl_probe.dart`, which builds a plain AGP app applying a stub Flutter plugin
+against the real module and asserts that `libdicom_toolkit.so` is packaged.
 
 ## 0.2.9
 

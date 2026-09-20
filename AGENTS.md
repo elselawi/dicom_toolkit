@@ -153,7 +153,7 @@ flutter test
 dart analyze lib
 
 # Android: exercise android.newDsl=true (AGP 10 readiness) against android/ in place
-dart run .github/scripts/agp_newdsl_probe.dart
+dart run tool/agp_newdsl_probe.dart
 ```
 
 **CRITICAL**: After changing any `rust/src/api/**/*.rs` struct:
@@ -208,7 +208,7 @@ Kotlin 2.4.0).
 | Component | Supported | Verification |
 |-----------|-----------|--------------|
 | AGP | 8.13.1 – 9.1.x | Built a stock Flutter app + this plugin at path dependency with AGP 8.13.1 and 9.1.0 |
-| AGP `android.newDsl=true` | 9.1.0 | `dart run .github/scripts/agp_newdsl_probe.dart` |
+| AGP `android.newDsl=true` | 9.1.0 | `dart run tool/agp_newdsl_probe.dart` |
 | Gradle | 8.14 – 9.3.1 | Same builds as above; Gradle 9 removed `Project.buildDir` **and** `Project.exec` |
 | JDK (Gradle) | 17 – 21 | Gradle 8.14 refuses to run on JDK 25 |
 | NDK | app's `flutter.ndkVersion` | AGP 9's default is r28c / 28.2.13676358 |
@@ -240,7 +240,7 @@ re-synced blindly** — its header comment lists every deviation with a Tier A /
 Upstream main already contains the `ExecOperations` fix, so when upstream lands Tier B a sync
 only needs to re-apply the Tier B block. Known remaining upstream-inherited warning:
 `Invocation of Task.project at execution time` (the task action reads `project.cargokit`); it
-is a Gradle-10 error but it is not an AGP deprecation, so CI does not gate on it.
+is a Gradle-10 error, not an AGP deprecation.
 
 ---
 

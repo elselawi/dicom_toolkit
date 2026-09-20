@@ -398,8 +398,12 @@ The module builds with both `android.newDsl=false` (the Flutter 3.47 template de
 is removed in AGP 10). Note that on **Flutter 3.47 the flag cannot be enabled for a Flutter
 app at all** — Flutter's own Gradle plugin casts the AGP extension to
 `com.android.build.gradle.AbstractAppExtension` (`FlutterPlugin.kt:354`) and fails before any
-package code is reached. CI verifies the new DSL with
-[`.github/scripts/agp_newdsl_probe.dart`](.github/scripts/agp_newdsl_probe.dart).
+package code is reached. You can still verify the module under the new DSL locally with
+[`tool/agp_newdsl_probe.dart`](tool/agp_newdsl_probe.dart):
+
+```bash
+dart run tool/agp_newdsl_probe.dart
+```
 
 ---
 

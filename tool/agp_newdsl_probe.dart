@@ -1,4 +1,4 @@
-// AGP new-DSL probe.
+// AGP new-DSL probe — local verification tool, not part of any CI.
 //
 // Verifies that dicom_toolkit still configures and packages its Rust binaries when a
 // consumer sets `android.newDsl=true` (the AGP 9 default, and the only mode AGP 10 will
@@ -21,7 +21,7 @@
 // block.
 //
 // Usage (from the package root):
-//   dart run .github/scripts/agp_newdsl_probe.dart [--agp <version>] [--keep]
+//   dart run tool/agp_newdsl_probe.dart [--agp <version>] [--keep]
 //
 // Exit code 0 means: the module configured under the new DSL and `libdicom_toolkit.so` was
 // packaged for every ABI cargokit was asked to build.

@@ -14,7 +14,8 @@
 ///             baseline against upstream main (fzyzcjy/cargokit@6f7144d192b04075acd73af2656cdebb1d3e4055,
 ///             the submodule pointer of fzyzcjy/flutter_rust_bridge master at the time of
 ///             writing) shows the upstream side already carries deviation A2
-///             (`ExecOperations`) but still uses `project.buildDir`.
+///             (`ExecOperations`) but still uses `project.buildDir` and the legacy variant
+///             API — i.e. upstream main is *not* yet Gradle-9/AGP-10 clean.
 ///
 /// Local deviations, so a future sync can rebase instead of re-copying:
 ///
@@ -22,11 +23,36 @@
 ///     A1. `project.buildDir`     -> `project.layout.buildDirectory.get().asFile`
 ///     A2. `project.exec { }`     -> injected `org.gradle.process.ExecOperations`
 ///
+///   Tier B — AGP 10 readiness, verified with `android.newDsl=true` (AGP 9 blocks the
+///            legacy variant API, `android.sdkDirectory` and `AndroidSourceSet.jniLibs`
+///            in the new DSL):
+///     B1. `android.applicationVariants` / `android.libraryVariants` + `variants.all { }`
+///         -> `androidComponents.onVariants { }` on this module
+///     B2. `plugin.project.android.sdkDirectory`
+///         -> `androidComponents.sdkComponents.sdkDirectory` (a provider)
+///     B3. `plugin.project.android.compileSdkVersion.substring(8)`
+///         -> `plugin.project.android.compileSdk`
+///     B4. `plugin.project.android.defaultConfig.minSdkVersion.apiLevel`
+///         -> `plugin.project.android.defaultConfig.minSdk`, falling back to the
+///            resolved per-variant `variant.minSdk.apiLevel`
+///     B5. `android.sourceSets.maybeCreate(buildType).jniLibs.srcDir(...)` plus the
+///         `merge<BuildType>NativeLibs` hook
+///         -> `variant.sources.jniLibs.addGeneratedSourceDirectory(...)`; AGP then owns the
+///            ordering of the Rust build relative to the native-library merge.
+///     B6. `CargoKitBuildTask.outputDir` became an `@OutputDirectory` `DirectoryProperty`
+///         (required by `addGeneratedSourceDirectory`). The task is explicitly kept
+///         always-out-of-date because the Rust sources are outside Gradle's model.
+///
+/// Tier A (deviations A1/A2) is exactly what upstream already did — when upstream main is
+/// synced, only Tier B has to be re-applied on top.
 /// ---------------------------------------------------------------------------------------
 
 import java.nio.file.Paths
 import javax.inject.Inject
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.api.Action
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.process.ExecOperations
 
 CargoKitPlugin.file = buildscript.sourceFile
@@ -51,8 +77,10 @@ abstract class CargoKitBuildTask extends DefaultTask {
     @Input
     String buildDir
 
-    @Input
-    String outputDir
+    // Deviation B6: `variant.sources.jniLibs.addGeneratedSourceDirectory` requires the
+    // wired property to be a DirectoryProperty annotated with @OutputDirectory.
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDir()
 
     @Input
     String ndkVersion
@@ -103,7 +131,7 @@ abstract class CargoKitBuildTask extends DefaultTask {
             environment "CARGOKIT_MANIFEST_DIR", manifestDir
             environment "CARGOKIT_CONFIGURATION", buildMode
             environment "CARGOKIT_TARGET_TEMP_DIR", buildDir
-            environment "CARGOKIT_OUTPUT_DIR", outputDir
+            environment "CARGOKIT_OUTPUT_DIR", outputDir.get().asFile.absolutePath
             environment "CARGOKIT_NDK_VERSION", ndkVersion
             environment "CARGOKIT_SDK_DIR", sdkDirectory
             environment "CARGOKIT_COMPILE_SDK_VERSION", compileSdkVersion
@@ -148,72 +176,107 @@ class CargoKitPlugin implements Plugin<Project> {
             return;
         }
 
-        // Gradle 9 removed `Project.buildDir` (deviation A1). Reading the directory property
-        // is safe here: the root build script redirects `layout.buildDirectory` for every
-        // subproject during the root project's evaluation, which always happens before this
-        // module is configured.
+        // Gradle 9 removed `Project.buildDir`; read the directory property instead
+        // (deviation A1). Resolving it here is safe: the root build script redirects
+        // `layout.buildDirectory` for every subproject during the root project's
+        // evaluation, which always happens before this module is configured.
         def buildDirectory = project.layout.buildDirectory
         def cargoBuildDir = "${buildDirectory.get().asFile}/build"
 
-        // Determine if the project is an application or library
-        def isApplication = plugin.project.plugins.hasPlugin('com.android.application')
-        def variants = isApplication ? plugin.project.android.applicationVariants : plugin.project.android.libraryVariants
+        // The project the Flutter gradle plugin is applied to (the Android app). Its DSL is
+        // where the Rust build has to read the NDK version, SDK location, compileSdk and
+        // minSdk from.
+        def appProject = plugin.project
+        def appAndroid = appProject.extensions.getByName("android")
 
-        variants.all { variant ->
+        // Deviation B2: `android.sdkDirectory` (a File) is blocked in AGP 9's new DSL.
+        // `androidComponents.sdkComponents.sdkDirectory` is the provider-based replacement
+        // and exists in AGP 8.11+ as well as AGP 9.
+        def appSdkDirectory = appProject.extensions.getByName("androidComponents")
+                .sdkComponents.sdkDirectory
 
-            final buildType = variant.buildType.name
+        def List<String> platforms
+        try {
+            platforms = com.flutter.gradle.FlutterPluginUtils.getTargetPlatforms(project).collect()
+        } catch (Exception ignored) {
+            platforms = plugin.getTargetPlatforms().collect()
+        }
 
-            def cargoOutputDir = "${buildDirectory.get().asFile}/jniLibs/${buildType}";
-            def jniLibs = project.android.sourceSets.maybeCreate(buildType).jniLibs;
-            jniLibs.srcDir(new File(cargoOutputDir))
+        // Deviation B1: the legacy variant API (`applicationVariants`/`libraryVariants` and
+        // `variants.all { }`) is blocked when `android.newDsl=true`. `androidComponents`
+        // drives the same build types here; the Flutter gradle plugin only adds the extra
+        // "profile" build type to the app project, never to plugin modules, so the set of
+        // build types -- and therefore the set of tasks -- is unchanged.
+        //
+        // The Kotlin `onVariants(selector = ..., callback)` overload with a default argument
+        // is not reachable from Groovy, hence the explicit selector and `Action` cast.
+        def androidComponents = project.extensions.getByName("androidComponents")
+        androidComponents.onVariants(androidComponents.selector(), { variant ->
 
-            def List<String> platforms
-            try {
-                platforms = com.flutter.gradle.FlutterPluginUtils.getTargetPlatforms(project).collect()
-            } catch (Exception ignored) {
-                platforms = plugin.getTargetPlatforms().collect()
-            }
+            final buildType = variant.buildType
 
+            def List<String> variantPlatforms = new ArrayList<>(platforms)
             // Same thing addFlutterDependencies does in flutter.gradle
             if (buildType == "debug") {
-                platforms.add("android-x86")
-                platforms.add("android-x64")
+                variantPlatforms.add("android-x86")
+                variantPlatforms.add("android-x64")
             }
 
-            // The task name depends on plugin properties, which are not available
-            // at this point
-            project.getGradle().afterProject {
-                def taskName = "cargokitCargoBuild${project.cargokit.libname.capitalize()}${buildType.capitalize()}";
-
-                if (project.tasks.findByName(taskName)) {
-                    return
-                }
-
-                if (plugin.project.android.ndkVersion == null) {
-                    throw new GradleException("Please set 'android.ndkVersion' in 'app/build.gradle'.")
-                }
-
-                def task = project.tasks.create(taskName, CargoKitBuildTask.class) {
-                    buildMode = variant.buildType.name
-                    buildDir = cargoBuildDir
-                    outputDir = cargoOutputDir
-                    ndkVersion = plugin.project.android.ndkVersion
-                    sdkDirectory = plugin.project.android.sdkDirectory
-                    minSdkVersion = plugin.project.android.defaultConfig.minSdkVersion.apiLevel as int
-                    compileSdkVersion = plugin.project.android.compileSdkVersion.substring(8) as int
-                    targetPlatforms = platforms
-                    pluginFile = CargoKitPlugin.file
-                }
-                def onTask = { newTask ->
-                    if (newTask.name == "merge${buildType.capitalize()}NativeLibs") {
-                        newTask.dependsOn task
-                        // Fix gradle 7.4.2 not picking up JNI library changes
-                        newTask.outputs.upToDateWhen { false }
-                    }
-                }
-                project.tasks.each onTask
-                project.tasks.whenTaskAdded onTask
+            def libname = project.cargokit.libname
+            if (libname == null) {
+                throw new GradleException("Property 'libname' must be set on cargokit extension")
             }
-        }
+
+            if (appAndroid.ndkVersion == null) {
+                throw new GradleException("Please set 'android.ndkVersion' in 'app/build.gradle'.")
+            }
+
+            // Deviation B4: `minSdkVersion.apiLevel` is a legacy-DSL-only accessor. Prefer
+            // the app's configured `defaultConfig.minSdk` so the Rust build still targets
+            // the consumer's lowest supported API level, and fall back to the value AGP
+            // resolved for this variant.
+            def minSdk = appAndroid.defaultConfig.minSdk
+            if (minSdk == null) {
+                minSdk = variant.minSdk?.apiLevel
+            }
+            if (minSdk == null) {
+                throw new GradleException("Could not determine minSdk; set 'android.defaultConfig.minSdk' in 'app/build.gradle'.")
+            }
+
+            def taskName = "cargokitCargoBuild${libname.capitalize()}${buildType.capitalize()}"
+
+            // Deviation B6: `outputDir` is a DirectoryProperty so that it can be wired into
+            // AGP's Sources API below.
+            def task = project.tasks.register(taskName, CargoKitBuildTask.class) {
+                buildMode = buildType
+                buildDir = cargoBuildDir
+                outputDir.set(buildDirectory.dir("jniLibs/${buildType}"))
+                ndkVersion = appAndroid.ndkVersion
+                sdkDirectory = appSdkDirectory.get().asFile.absolutePath
+                minSdkVersion = minSdk as int
+                // Deviation B3: `compileSdkVersion` (the "android-XX" string) is legacy-only.
+                compileSdkVersion = appAndroid.compileSdk as int
+                targetPlatforms = variantPlatforms
+                pluginFile = CargoKitPlugin.file
+
+                // The Rust sources are outside Gradle's input model, so up-to-date checks
+                // cannot be trusted here -- cargokit's own crate-hash cache decides whether
+                // cargo actually recompiles. This preserves the previous behaviour, where
+                // the task always ran (upstream achieved the same with
+                // `merge<BuildType>NativeLibs.outputs.upToDateWhen { false }`).
+                outputs.upToDateWhen { false }
+            }
+
+            // Deviation B5: replaces
+            //   android.sourceSets.maybeCreate(buildType).jniLibs.srcDir(...)
+            //   (`AndroidSourceSet.jniLibs` is blocked in AGP 9's new DSL) and the
+            //   `merge<BuildType>NativeLibs` hookup -- AGP now adds the task to the variant's
+            //   jniLibs sources and orders it before the native-library merge itself.
+            def jniLibs = variant.sources.jniLibs
+            if (jniLibs == null) {
+                throw new GradleException("AGP variant '${variant.name}' exposes no jniLibs source directory; cannot wire the cargo output into the AAR.")
+            }
+            jniLibs.addGeneratedSourceDirectory(task) { it.outputDir }
+        } as Action)
     }
 }

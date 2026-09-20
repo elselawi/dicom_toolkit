@@ -62,7 +62,8 @@ Future<void> main(final List<String> args) async {
     final flutterRoot =
         _readProperty('${harnessAndroid.path}/local.properties', 'flutter.sdk');
     if (flutterRoot == null) {
-      _fail('`flutter create` did not write flutter.sdk to android/local.properties.');
+      _fail(
+          '`flutter create` did not write flutter.sdk to android/local.properties.');
     }
 
     _writeHarness(harnessAndroid, agpVersion, androidDir.path);
@@ -75,7 +76,8 @@ Future<void> main(final List<String> args) async {
       allowFailure: true,
     );
     if (exitCode != 0) {
-      _fail('Assembling the new-DSL probe app failed (see the Gradle output above).');
+      _fail(
+          'Assembling the new-DSL probe app failed (see the Gradle output above).');
     }
 
     final apk = Directory('${harnessAndroid.path}/out/app/outputs/apk/debug')
@@ -92,11 +94,13 @@ Future<void> main(final List<String> args) async {
         .where((final abi) => !entries.contains('lib/$abi/libdicom_toolkit.so'))
         .toList();
     if (missing.isNotEmpty) {
-      _fail('libdicom_toolkit.so is missing from the APK for: ${missing.join(', ')}\n'
+      _fail(
+          'libdicom_toolkit.so is missing from the APK for: ${missing.join(', ')}\n'
           'APK entries:\n  ${entries.join('\n  ')}');
     }
 
-    stdout.writeln('OK: android.newDsl=true builds, and libdicom_toolkit.so is packaged '
+    stdout.writeln(
+        'OK: android.newDsl=true builds, and libdicom_toolkit.so is packaged '
         'for ${_expectedAbis.join(', ')}.');
   } finally {
     if (keep) {
@@ -112,7 +116,8 @@ Future<void> main(final List<String> args) async {
   }
 }
 
-void _writeHarness(final Directory androidDir, final String agpVersion, final String pluginAndroidDir) {
+void _writeHarness(final Directory androidDir, final String agpVersion,
+    final String pluginAndroidDir) {
   File('${androidDir.path}/app/build.gradle.kts').deleteSync();
   // Flutter-only generated sources: they reference the Flutter embedding, which this app
   // deliberately does not depend on.
@@ -120,17 +125,19 @@ void _writeHarness(final Directory androidDir, final String agpVersion, final St
       .deleteSync();
   final kotlinDir = Directory('${androidDir.path}/app/src/main/kotlin');
   if (kotlinDir.existsSync()) kotlinDir.deleteSync(recursive: true);
-  File('${androidDir.path}/app/build.gradle').writeAsStringSync(_appBuildGradle);
+  File('${androidDir.path}/app/build.gradle')
+      .writeAsStringSync(_appBuildGradle);
   File('${androidDir.path}/app/src/main/AndroidManifest.xml')
       .writeAsStringSync(_manifest);
   File('${androidDir.path}/settings.gradle.kts')
       .writeAsStringSync(_settingsGradleKts(agpVersion, pluginAndroidDir));
   File('${androidDir.path}/build.gradle').writeAsStringSync(_rootBuildGradle);
-  File('${androidDir.path}/gradle.properties').writeAsStringSync(_gradleProperties);
+  File('${androidDir.path}/gradle.properties')
+      .writeAsStringSync(_gradleProperties);
 
-  final stubDir =
-      Directory('${androidDir.path}/buildSrc/src/main/groovy/com/flutter/gradle')
-        ..createSync(recursive: true);
+  final stubDir = Directory(
+      '${androidDir.path}/buildSrc/src/main/groovy/com/flutter/gradle')
+    ..createSync(recursive: true);
   File('${androidDir.path}/buildSrc/build.gradle')
       .writeAsStringSync(_buildSrcBuildGradle);
   File('${stubDir.path}/FlutterPlugin.groovy')
@@ -237,7 +244,9 @@ List<String> _zipEntries(final File archive) {
   }
 }
 
-String _settingsGradleKts(final String agpVersion, final String pluginAndroidDir) => '''
+String _settingsGradleKts(
+        final String agpVersion, final String pluginAndroidDir) =>
+    '''
 pluginManagement {
     repositories {
         google()

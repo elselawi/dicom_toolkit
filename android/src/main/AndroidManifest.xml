@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- The package/namespace is declared as `namespace` in build.gradle. The legacy
+        <!-- The package/namespace is declared as `namespace` in build.gradle. The legacy
          `package` attribute was removed here: AGP 9 rejects it and it duplicated the
          namespace. -->
 </manifest>

@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.9`
+- **Version**: `0.2.10`
 
 ---
 
@@ -151,6 +151,9 @@ flutter test
 
 # Lint
 dart analyze lib
+
+# Android: exercise android.newDsl=true (AGP 10 readiness) against android/ in place
+dart run .github/scripts/agp_newdsl_probe.dart
 ```
 
 **CRITICAL**: After changing any `rust/src/api/**/*.rs` struct:
@@ -194,6 +197,50 @@ copies artifacts to all required locations.
 - `lib/src/rust/**` and `rust/src/frb_generated.rs` are auto-generated
 - `lib/src/rust/**` excluded from analysis in `analysis_options.yaml`
 - `cargokit/**` excluded from analysis
+
+---
+
+## Supported Android build matrix
+
+Last verified 2026-09-20 against Flutter 3.47.0 (template defaults: Gradle 9.3.1, AGP 9.1.0,
+Kotlin 2.4.0).
+
+| Component | Supported | Verification |
+|-----------|-----------|--------------|
+| AGP | 8.13.1 – 9.1.x | Built a stock Flutter app + this plugin at path dependency with AGP 8.13.1 and 9.1.0 |
+| AGP `android.newDsl=true` | 9.1.0 | `dart run .github/scripts/agp_newdsl_probe.dart` |
+| Gradle | 8.14 – 9.3.1 | Same builds as above; Gradle 9 removed `Project.buildDir` **and** `Project.exec` |
+| JDK (Gradle) | 17 – 21 | Gradle 8.14 refuses to run on JDK 25 |
+| NDK | app's `flutter.ndkVersion` | AGP 9's default is r28c / 28.2.13676358 |
+| module `compileSdk` | 36 | AAR `minCompileSdk` == 36, so no consumer override is needed |
+| module `minSdk` | 24 | Flutter 3.47 hard-errors on app minSdk < 23 |
+
+`android.build.gradle` uses property-assignment syntax (`compileSdk = 36`) throughout so it
+parses under both DSL implementations. Do not reintroduce `compileSdkVersion 33`,
+`minSdkVersion`, `applicationVariants`/`libraryVariants`, `android.sdkDirectory`,
+`android.compileSdkVersion` or `sourceSets.*.jniLibs` — all of them break AGP 9's new DSL
+(and therefore AGP 10).
+
+---
+
+## cargokit is a locally-patched vendored copy
+
+`cargokit/` is a copy of [fzyzcjy/cargokit](https://github.com/fzyzcjy/cargokit) (the
+maintained fork of the archived `irondash/cargokit`) as vendored by flutter_rust_bridge's
+`integrate` backend. **`cargokit/gradle/plugin.gradle` is patched locally and must not be
+re-synced blindly** — its header comment lists every deviation with a Tier A / Tier B label:
+
+- **Tier A** (Gradle 9): `project.buildDir` → `project.layout.buildDirectory`, `project.exec`
+  → injected `ExecOperations`.
+- **Tier B** (AGP 10 readiness): `androidComponents.onVariants` instead of the legacy variant
+  API, `androidComponents.sdkComponents.sdkDirectory`, `CommonExtension.compileSdk`,
+  `variant.minSdk.apiLevel`, and `variant.sources.jniLibs.addGeneratedSourceDirectory(...)`
+  instead of `AndroidSourceSet.jniLibs` + the `merge<BuildType>NativeLibs` hook.
+
+Upstream main already contains the `ExecOperations` fix, so when upstream lands Tier B a sync
+only needs to re-apply the Tier B block. Known remaining upstream-inherited warning:
+`Invocation of Task.project at execution time` (the task action reads `project.cargokit`); it
+is a Gradle-10 error but it is not an AGP deprecation, so CI does not gate on it.
 
 ---
 

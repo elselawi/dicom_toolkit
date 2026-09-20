@@ -1,3 +1,87 @@
+## 0.2.10
+
+**Android build configuration: AGP 9-ready and AGP 10-proof. Consumers can delete their
+`compileSdk` workaround.**
+
+### Android module (`android/build.gradle`, manifest)
+
+- **(breaking / build)** `compileSdkVersion 33` → `compileSdk 36`. The AAR's implicit
+  `minCompileSdk` is now 36, which matches the Flutter 3.47 app template default, so
+  consumers are never pushed above their own `compileSdk`. This removes the AAR-metadata
+  failure below, and with it the need for the `subprojects { afterEvaluate { ...
+  compileSdkVersion ... } }` hack in consumer root builds — **delete that block**:
+
+  ```
+  Dependency 'androidx.lifecycle:lifecycle-process:2.7.0' requires libraries and
+  applications that depend on it to compile against version 34 or later of the Android
+  APIs. :dicom_toolkit is currently compiled against android-33.
+  ```
+
+- **(breaking / build)** `minSdkVersion 19` → `minSdk 24`. Flutter 3.47 hard-errors on an app
+  `minSdk < 23` and its template default is 24.
+- **(build)** `sourceCompatibility`/`targetCompatibility` Java 8 → `JavaVersion.VERSION_17`.
+- **(build)** Dropped the vestigial `buildscript { classpath 'com.android.tools.build:gradle:7.3.0' }`
+  block; AGP is supplied by the consumer's `settings.gradle` (via Flutter's plugin loader),
+  which is what actually happened, and the pin was actively misleading.
+- **(build)** `namespace` is now unconditional and every property uses property-assignment
+  syntax, so the file is valid under both `android.newDsl=false` and `android.newDsl=true`.
+- **(build)** Removed the legacy `package` attribute from
+  `android/src/main/AndroidManifest.xml`; AGP 9 rejects it and the namespace is declared in
+  `build.gradle`.
+
+### cargokit (vendored, patched in place)
+
+- **(fix)** Gradle 9 removed `Project.buildDir` **and** `Project.exec`. Both were used by
+  `cargokit/gradle/plugin.gradle`, so every Android build on Gradle 9.3.1 failed with
+  `Could not find method exec() for arguments [...] on project ':dicom_toolkit'` (or, earlier,
+  a `buildDir` error). Replaced with `project.layout.buildDirectory` and an injected
+  `org.gradle.process.ExecOperations`.
+- **(fix)** cargokit no longer touches any API that AGP 9 blocks when `android.newDsl=true`
+  (the AGP 9 default, and the only mode AGP 10 supports). Swapped:
+  `android.applicationVariants`/`libraryVariants` + `variants.all` →
+  `androidComponents.onVariants`; `android.sdkDirectory` →
+  `androidComponents.sdkComponents.sdkDirectory`; `android.compileSdkVersion.substring(8)` →
+  `CommonExtension.compileSdk`; `defaultConfig.minSdkVersion.apiLevel` →
+  `defaultConfig.minSdk` with a `variant.minSdk.apiLevel` fallback; and
+  `AndroidSourceSet.jniLibs` + the `merge<BuildType>NativeLibs` hook →
+  `variant.sources.jniLibs.addGeneratedSourceDirectory(...)`.
+- **(build)** Behaviour is unchanged: one Rust build per build type, targets from
+  `FlutterPluginUtils.getTargetPlatforms()` (+ x86/x64 for debug), output merged into
+  `jniLibs`. The task keeps its `@Input`s and is still always out-of-date, because the Rust
+  sources are outside Gradle's input model (cargokit's own crate-hash cache decides whether
+  cargo recompiles).
+- **(docs)** `cargokit/gradle/plugin.gradle` now documents the local deviation from upstream
+  [`fzyzcjy/cargokit`](https://github.com/fzyzcjy/cargokit) (the maintained fork of the
+  archived `irondash/cargokit`) so future syncs rebase instead of re-copying.
+
+### Example app + CI
+
+- **(build)** `example/android` regenerated from the Flutter 3.47 template: Gradle 9.3.1,
+  AGP 9.1.0, Kotlin 2.4.0, `android.newDsl=false` + `android.builtInKotlin=false`,
+  `kotlin { compilerOptions { jvmTarget = JVM_17 } }`. `MainActivity` moved into the
+  namespace's package directory.
+- **(fix)** Example: `file_picker` 11 → `^13.1.0`. file_picker 11.x applies the Kotlin Gradle
+  Plugin and its `FilePickerPlugin` is never compiled under AGP 9 — even in a stock app with
+  no dicom_toolkit involved (`cannot find symbol: class FilePickerPlugin`). 13.x also removed
+  the `FilePickerResult` wrapper, so the picker call site was updated.
+- **(ci)** New GitHub Actions workflow with four jobs: analyze + `flutter test` +
+  `flutter pub publish --dry-run`; the example app on Flutter 3.47 defaults; a consumer app
+  pinned to AGP 8.13.1/Gradle 8.14/JDK 17 that **fails on AGP deprecation warnings**; and an
+  `android.newDsl=true` probe.
+
+### Known limitation: `android.newDsl=true` in a Flutter app
+
+`android.newDsl=true` cannot be exercised through a Flutter app on Flutter 3.47, and this is
+not a dicom_toolkit problem: Flutter's own Gradle plugin casts the AGP extension to
+`com.android.build.gradle.AbstractAppExtension` (`FlutterPlugin.kt:354`, called from
+`FlutterPlugin.apply`) and Flutter responds to the resulting `ClassCastException` with its own
+Flutter Fix: *"To resolve this update flutter or opt out of `android.newDsl`."* No
+dicom_toolkit code runs before that point. CI therefore verifies the new DSL with
+`.github/scripts/agp_newdsl_probe.dart`, which builds a plain AGP app applying a stub Flutter
+plugin against the real module and asserts that `libdicom_toolkit.so` is packaged; the
+app-level check runs in the same job and turns green automatically once Flutter supports the
+flag.
+
 ## 0.2.9
 
 - **(feat)** Added `DicomTagId.planarConfiguration` constant and `u_is_rgb` shader support for true-color images.

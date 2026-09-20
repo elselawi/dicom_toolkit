@@ -350,6 +350,59 @@ Alternatively, use this launch configuration to serve from VS Code:
 
 ---
 
+## Android build requirements
+
+dicom_toolkit ships its Android library as a normal Gradle subproject that compiles a Rust
+core through a vendored copy of cargokit, so the versions below are the consumer's, not the
+package's.
+
+| Component | Supported | Notes |
+|-----------|-----------|-------|
+| Android Gradle Plugin | 8.13.1 – 9.1.x | Tested with 8.13.1 and 9.1.0 (and 9.1.0 with `android.newDsl=true`) |
+| Gradle | 8.14 – 9.3.1 | Gradle 9 removed `Project.buildDir` and `Project.exec`; the vendored cargokit is patched for this |
+| Kotlin Gradle Plugin | ≥ 2.2.20 | 2.4.0 is the Flutter 3.47 template default |
+| JDK (running Gradle) | 17 – 21 | Gradle 8.14 does not run on JDK 25; AGP 9 requires ≥ 17 |
+| Android NDK | `flutter.ndkVersion` | AGP 9's default is r28c (`28.2.13676358`). Your app must declare `ndkVersion`, otherwise cargokit stops with *"Please set 'android.ndkVersion' in 'app/build.gradle'"* |
+| compileSdk (DicomToolkit module) | 36 | Matches the Flutter 3.47 app default, so nothing forces your app's compileSdk higher |
+| minSdk (DicomToolkit module) | 24 | Matches the Flutter 3.47 app default |
+
+### No compileSdk workaround needed
+
+Older releases compiled the module against `android-33`, which made AGP's AAR-metadata check
+fail for consumers of recent AndroidX artifacts:
+
+```
+Dependency 'androidx.lifecycle:lifecycle-process:2.7.0' requires libraries and applications
+that depend on it to compile against version 34 or later of the Android APIs.
+:dicom_toolkit is currently compiled against android-33.
+```
+
+Since 0.2.10 the module compiles against 36, so this block in a consumer root
+`build.gradle`/`build.gradle.kts` is **no longer necessary and should be deleted**:
+
+```groovy
+// DELETE THIS — obsolete workaround
+subprojects {
+    afterEvaluate { subproject ->
+        if (subproject.name == 'dicom_toolkit') {
+            subproject.android.compileSdkVersion = 36
+        }
+    }
+}
+```
+
+### `android.newDsl`
+
+The module builds with both `android.newDsl=false` (the Flutter 3.47 template default) and
+`android.newDsl=true` (the AGP 9 default and the only mode AGP 10 will support; the opt-out
+is removed in AGP 10). Note that on **Flutter 3.47 the flag cannot be enabled for a Flutter
+app at all** — Flutter's own Gradle plugin casts the AGP extension to
+`com.android.build.gradle.AbstractAppExtension` (`FlutterPlugin.kt:354`) and fails before any
+package code is reached. CI verifies the new DSL with
+[`.github/scripts/agp_newdsl_probe.dart`](.github/scripts/agp_newdsl_probe.dart).
+
+---
+
 ## License
 
 **GPL v3** — see [LICENSE](LICENSE).

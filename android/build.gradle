@@ -1,19 +1,18 @@
 // The Android Gradle Plugin builds the native code with the Android NDK.
+//
+// This library module is applied by the consumer's Gradle build (Flutter adds it as a
+// subproject from `.flutter-plugins-dependencies`), so it intentionally has no
+// `buildscript { }` block: AGP is already on the root classpath through the
+// `dev.flutter.flutter-plugin-loader` plugin the app's settings.gradle applies.
+//
+// Every `android { }` property below uses property-assignment syntax so the file stays
+// valid under both `android.newDsl=false` (the Flutter 3.47 template default) and
+// `android.newDsl=true` (AGP 10 readiness).
 
-group 'com.flutter_rust_bridge.dicom_toolkit'
-version '1.0'
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-    dependencies {
-        // The Android Gradle Plugin knows how to build native code with the NDK.
-        classpath 'com.android.tools.build:gradle:7.3.0'
-    }
-}
+// Property-assignment syntax on purpose: the Groovy space-assignment form
+// (`group 'x'`) is deprecated in Gradle 9 and removed in Gradle 10.
+group = 'com.flutter_rust_bridge.dicom_toolkit'
+version = '1.0'
 
 rootProject.allprojects {
     repositories {
@@ -25,27 +24,31 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
-    if (project.android.hasProperty("namespace")) {
-        namespace 'com.flutter_rust_bridge.dicom_toolkit'
-    }
+    // Declared here rather than in AndroidManifest.xml: AGP 9 rejects the legacy `package`
+    // attribute, and `namespace` exists on both the legacy and the new DSL.
+    namespace = 'com.flutter_rust_bridge.dicom_toolkit'
 
-    // Bumping the plugin compileSdkVersion requires all clients of this plugin
-    // to bump the version in their app.
-    compileSdkVersion 33
+    // 36 matches the Flutter 3.47 app template default (`flutter.compileSdkVersion`), so the
+    // AAR's implicit minCompileSdk (== this compileSdk) can never force consumers to raise
+    // theirs. This replaces `compileSdkVersion 33`, which made AGP's AAR-metadata check fail
+    // for consumers of e.g. androidx.lifecycle:lifecycle-process:2.7.0 and forced them into a
+    // `subprojects { afterEvaluate { ... compileSdkVersion ... } }` workaround.
+    compileSdk = 36
 
-    // Use the NDK version
-    // declared in /android/app/build.gradle file of the Flutter project.
-    // Replace it with a version number if this plugin requires a specfic NDK version.
-    // (e.g. ndkVersion "23.1.7779620")
-    ndkVersion android.ndkVersion
+    // Use the NDK version declared in android/app/build.gradle of the consuming Flutter app.
+    // cargokit reads it from the app project and hard-errors when it is not set, so the app
+    // must declare one (the Flutter 3.47 template does, through `flutter.ndkVersion`).
+    // AGP 9's default NDK is r28c / 28.2.13676358.
+    ndkVersion = android.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
-        minSdkVersion 19
+        // Flutter 3.47 hard-errors on app minSdk < 23; its template default is 24.
+        minSdk = 24
     }
 }
 

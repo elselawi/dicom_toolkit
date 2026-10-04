@@ -2,14 +2,9 @@ library;
 
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_rust_bridge/flutter_rust_bridge.dart'
-    show loadExternalLibrary;
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show ExternalLibraryLoaderConfig;
-
 import 'src/core/dicom_parse_result.dart';
-import 'src/rust/frb_generated.dart';
+import 'src/platform/rust_library_web.dart'
+    if (dart.library.io) 'src/platform/rust_library_io.dart';
 import 'src/tools/dicom_renderer.dart';
 
 export 'src/backend/dicom_decoder.dart';
@@ -47,22 +42,15 @@ abstract class DicomToolkit {
   /// Initializes the underlying native engine.
   /// Must be called once at application startup, before any parsing or rendering.
   ///
-  /// On web, the WASM artifacts are pre-loaded from the Flutter asset path
-  /// (`assets/packages/dicom_toolkit/web/pkg/`) so that `flutter build web`
-  /// automatically bundles them — no manual copy step needed.
-  static Future<void> init() async {
-    if (kIsWeb) {
-      final lib = await loadExternalLibrary(
-        const ExternalLibraryLoaderConfig(
-          stem: 'dicom_toolkit',
-          ioDirectory: 'rust/target/release/',
-          webPrefix: 'assets/packages/dicom_toolkit/web/pkg/',
-        ),
-      );
-      return RustLib.init(externalLibrary: lib);
-    }
-    return RustLib.init();
-  }
+  /// Platform loading is handled internally, so this is the only call a
+  /// consumer needs:
+  /// * **Android / Windows / Linux** load the shared library packaged with the app.
+  /// * **iOS / macOS** resolve the Rust core that the podspec links statically
+  ///   into the app binary (no `Podfile` edits or linker flags required).
+  /// * **Web** loads the WASM bundle from the Flutter asset path
+  ///   (`assets/packages/dicom_toolkit/web/pkg/`), so `flutter build web`
+  ///   bundles it automatically — no manual copy step needed.
+  static Future<void> init() => initializeRustLibrary();
 
   /// One-liner: renders a [DicomParseResult] to a [dart:ui.Image].
   ///

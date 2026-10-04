@@ -54,3 +54,16 @@ class DicomConfigurationException extends DicomException {
   /// Thrown when an invalid configuration is passed to the SDK.
   const DicomConfigurationException(super.message);
 }
+
+/// Thrown when the native Rust engine cannot be loaded into the current process.
+///
+/// On iOS and macOS the Rust core is linked into the app target by the podspec
+/// (`-force_load`, with `DEAD_CODE_STRIPPING = NO` to keep it). If it is missing
+/// — for example because those podspec settings were removed, or the pod was
+/// compiled with different linker settings — `DicomToolkit.init()` throws this
+/// instead of surfacing a raw dynamic-library error. See the "iOS and macOS"
+/// section of the package README.
+class DicomInitializationException extends DicomException {
+  /// Thrown when the native Rust engine cannot be loaded into the current process.
+  const DicomInitializationException(super.message, [super.originalError]);
+}

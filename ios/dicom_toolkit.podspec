@@ -41,6 +41,23 @@ An advanced medical imaging and DICOM processing library for Flutter, backed by 
     'DEFINES_MODULE' => 'YES',
     # Flutter.framework does not contain a i386 slice.
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
-    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/dicom_toolkit/libdicom_toolkit.a',
+  }
+
+  # Link the Rust core into the *consumer app* target, and stop the linker from
+  # removing it again.
+  #
+  # The flutter_rust_bridge entry points are resolved by name at runtime rather
+  # than referenced at link time, so DEAD_CODE_STRIPPING — on by default for
+  # Release — deletes the entire Rust core unless it is both force-loaded and
+  # protected. The app then still compiles, and fails later in
+  # `DicomToolkit.init()` (which reports DicomInitializationException).
+  #
+  # This cannot live in `pod_target_xcconfig`: that only affects the pod's own
+  # target, and with `use_frameworks! :linkage => :static` (or no
+  # `use_frameworks!`) the pod has no link step at all, so the flag never
+  # reaches the app.
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => '$(inherited) -force_load ${PODS_CONFIGURATION_BUILD_DIR}/dicom_toolkit/libdicom_toolkit.a',
+    'DEAD_CODE_STRIPPING' => 'NO',
   }
 end

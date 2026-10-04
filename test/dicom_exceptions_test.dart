@@ -43,4 +43,20 @@ void main() {
       expect(ex, isA<DicomException>());
     });
   });
+
+  group('DicomInitializationException', () {
+    test('carries the message and is a DicomException', () {
+      const ex = DicomInitializationException('Rust core is not linked');
+      expect(ex.message, 'Rust core is not linked');
+      expect(ex, isA<DicomException>());
+      expect(ex, isA<Exception>());
+      expect(ex.toString(), contains('Rust core is not linked'));
+    });
+
+    test('keeps the original error when provided', () {
+      const ex = DicomInitializationException('boom', 'ArgumentError');
+      expect(ex.originalError, 'ArgumentError');
+      expect(ex.toString(), contains('ArgumentError'));
+    });
+  });
 }

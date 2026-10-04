@@ -51,6 +51,11 @@
 - **(fix)** Shader compilation is attempted at most once. A failed compile — the normal
   case on web — previously re-loaded the shader asset on every render call, i.e. on every
   windowing drag frame.
+- **(fix)** Removed the per-frame trace in `DicomShaderPainter.paint`. It ran on every
+  repaint (~60×/s) and accounted for ~93% of all log output (382 → 25 lines for a single
+  parse-and-render). The renderer, decoder and controller traces remain, and release builds
+  were already silent — the guard const-folds away, so the log strings are not even in the
+  AOT binary.
 - **(fix)** `RoiStatistics.stdDev` returns `0` for a single-pixel ROI instead of `NaN`
   (the sample variance divided by `n - 1`).
 - **(build)** Version alignment: `pubspec.yaml`, `rust/Cargo.toml`, and the committed

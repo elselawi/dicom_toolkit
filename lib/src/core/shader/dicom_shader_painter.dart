@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/dicom_parse_result.dart';
@@ -54,14 +53,13 @@ class DicomShaderPainter extends CustomPainter {
   final bool invert;
 
   /// Performs the actual drawing operation using the fragment shader.
+  ///
+  /// Deliberately silent: `paint` runs on every frame, so logging here costs
+  /// more than it explains (it accounted for ~93% of all toolkit log output).
+  /// Use [DicomRenderer] / [DicomViewerController] traces to debug what is fed
+  /// to this painter.
   @override
   void paint(final Canvas canvas, final Size size) {
-    if (kDebugMode) {
-      // ignore: avoid_print
-      print(
-          '[DART] ShaderPainter.paint: size=${size.width.toInt()}x${size.height.toInt()} '
-          'wc=$windowCenter ww=$windowWidth colorize=$colorize invert=$invert');
-    }
     final meta = result.metadata;
     final isMonochrome1 = meta.photometricInterpretation == 'MONOCHROME1';
     final isMonochrome = result.isMonochrome;

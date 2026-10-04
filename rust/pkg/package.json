@@ -1,6 +1,6 @@
 {
   "name": "dicom_toolkit",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "files": [
     "dicom_toolkit_bg.wasm",
     "dicom_toolkit.js"

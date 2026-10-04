@@ -32,16 +32,19 @@ class DicomRenderer {
   })  : _colorMap = colorMap,
         _invert = invert;
   ui.FragmentShader? _shader;
+  Future<ui.FragmentShader?>? _shaderFuture;
   final DicomColorMap _colorMap;
   final bool _invert;
 
   /// Ensures the fragment shader has been compiled.
-  /// On web (CanvasKit), FragmentProgram is unsupported — returns null silently.
-  Future<ui.FragmentShader?> get shader async {
-    if (_shader != null) {
-      debugLog('[DART] renderer.shader: already cached');
-      return _shader;
-    }
+  ///
+  /// The compilation is attempted at most once: the resulting future is cached
+  /// so that a failed compile (e.g. on web, where `FragmentProgram.fromAsset`
+  /// is unsupported) does not retry on every frame. Returns null when no shader
+  /// is available.
+  Future<ui.FragmentShader?> get shader => _shaderFuture ??= _compileShaderOrNull();
+
+  Future<ui.FragmentShader?> _compileShaderOrNull() async {
     debugLog('[DART] renderer.shader: attempting _compileShader...');
     try {
       _shader = await _compileShader();
@@ -200,11 +203,13 @@ class DicomRenderer {
     debugLog('[DART] renderer.render: shader=${s == null ? "NULL" : "OK"}');
     if (s == null) {
       debugLog('[DART] renderer.render: taking CPU fallback path');
-      return createTexture(
+      return _renderCpu(
         result,
-        windowCenter: windowCenter,
-        windowWidth: windowWidth,
-        applyWindowing: true,
+        windowCenter: windowCenter ?? result.metadata.windowCenter,
+        windowWidth: windowWidth ?? result.metadata.windowWidth,
+        colorMap: colorMap ?? _colorMap,
+        invert: invert ?? _invert,
+        rotationSteps: rotationSteps,
       );
     }
     final texture = await createTexture(result);
@@ -241,52 +246,23 @@ class DicomRenderer {
     final effectiveInvert = invert ?? _invert;
     final rot = rotationSteps % 4;
 
-    final colorLut = effectiveColorMap == DicomColorMap.grayscale || !isMonochrome
-        ? null
-        : await _buildColorLutFor(effectiveColorMap);
-
     final s = await shader;
     if (s == null) {
-      // Web fallback: CPU windowing or direct texture
-      if (!isMonochrome) {
-        if (rot == 0 && !effectiveInvert) {
-          return texture;
-        }
-        if (effectiveInvert) {
-          final invTexture = await createTexture(
-            result,
-            applyWindowing: true,
-          );
-          if (rot == 0) return invTexture;
-          final recorder = ui.PictureRecorder();
-          final canvasW = rot.isOdd ? invTexture.height.toDouble() : invTexture.width.toDouble();
-          final canvasH = rot.isOdd ? invTexture.width.toDouble() : invTexture.height.toDouble();
-          final canvas = Canvas(recorder);
-          canvas.translate(canvasW / 2, canvasH / 2);
-          canvas.rotate(rot * 1.57079632679);
-          canvas.translate(-invTexture.width / 2, -invTexture.height / 2);
-          canvas.drawImage(invTexture, Offset.zero, Paint());
-          final picture = recorder.endRecording();
-          return picture.toImage(canvasW.toInt(), canvasH.toInt());
-        }
-        final recorder = ui.PictureRecorder();
-        final canvasW = rot.isOdd ? texture.height.toDouble() : texture.width.toDouble();
-        final canvasH = rot.isOdd ? texture.width.toDouble() : texture.height.toDouble();
-        final canvas = Canvas(recorder);
-        canvas.translate(canvasW / 2, canvasH / 2);
-        canvas.rotate(rot * 1.57079632679);
-        canvas.translate(-texture.width / 2, -texture.height / 2);
-        canvas.drawImage(texture, Offset.zero, Paint());
-        final picture = recorder.endRecording();
-        return picture.toImage(canvasW.toInt(), canvasH.toInt());
-      }
-      return createTexture(
+      // Web / no-shader fallback: apply windowing, color map, inversion and
+      // rotation in pure Dart — the shader is never reached.
+      return _renderCpu(
         result,
         windowCenter: wc,
         windowWidth: ww,
-        applyWindowing: true,
+        colorMap: effectiveColorMap,
+        invert: effectiveInvert,
+        rotationSteps: rot,
       );
     }
+
+    final colorLut = effectiveColorMap == DicomColorMap.grayscale || !isMonochrome
+        ? null
+        : await _buildColorLutFor(effectiveColorMap);
 
     // Bind uniforms (order must match shader expectations).
     final width = texture.width.toDouble();
@@ -323,9 +299,111 @@ class DicomRenderer {
     return rendered;
   }
 
+  /// CPU rendering fallback for platforms without a GPU fragment shader
+  /// (notably web/CanvasKit).
+  ///
+  /// Applies the Hounsfield transform, windowing, color map, inversion and
+  /// MONOCHROME1 handling in pure Dart, then packs the result to RGBA. This
+  /// mirrors the shader so that CPU and GPU output match.
+  Future<ui.Image> _renderCpu(
+    final DicomParseResult result, {
+    required final double windowCenter,
+    required final double windowWidth,
+    required final DicomColorMap colorMap,
+    required final bool invert,
+    required final int rotationSteps,
+  }) async {
+    final pixelData = result.pixelData;
+    if (pixelData is! DicomInt16PixelData) {
+      throw ArgumentError(
+          'Only 16-bit signed pixel data is currently supported');
+    }
+
+    final data = pixelData.buffer;
+    final pixelCount = pixelData.width * pixelData.height;
+    final meta = result.metadata;
+
+    final Uint8List rgbaData;
+    if (result.isMonochrome) {
+      final lut = colorMap == DicomColorMap.grayscale
+          ? null
+          : ColorMapLut.generate(colorMap);
+      rgbaData = applyWindowingRgba(
+        data,
+        pixelCount,
+        windowCenter: windowCenter,
+        windowWidth: windowWidth,
+        slope: meta.rescaleSlope,
+        intercept: meta.rescaleIntercept,
+        lut: lut,
+        // The shader inverts for MONOCHROME1 as well as for manual invert.
+        invert: invert || meta.photometricInterpretation == 'MONOCHROME1',
+      );
+    } else {
+      rgbaData = packRgb(
+        data,
+        pixelCount,
+        invert: invert,
+        bitsStored: pixelData.bitsStored,
+      );
+    }
+
+    final image =
+        await _decodeRgba(rgbaData, pixelData.width, pixelData.height);
+    return _rotateImage(image, rotationSteps);
+  }
+
+  /// Decodes packed RGBA [rgba] bytes into a [ui.Image].
+  Future<ui.Image> _decodeRgba(
+    final Uint8List rgba,
+    final int width,
+    final int height,
+  ) {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      rgba,
+      width,
+      height,
+      ui.PixelFormat.rgba8888,
+      (final ui.Image img) => completer.complete(img),
+    );
+    return completer.future;
+  }
+
+  /// Returns [image] rotated by [rotationSteps] × 90° clockwise.
+  ///
+  /// Returns [image] unchanged when no rotation is needed. When a new image is
+  /// produced, [image] is disposed.
+  Future<ui.Image> _rotateImage(
+    final ui.Image image,
+    final int rotationSteps,
+  ) async {
+    final rot = rotationSteps % 4;
+    if (rot == 0) return image;
+
+    final srcW = image.width.toDouble();
+    final srcH = image.height.toDouble();
+    final dstW = rot.isOdd ? srcH : srcW;
+    final dstH = rot.isOdd ? srcW : srcH;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.translate(dstW / 2, dstH / 2);
+    canvas.rotate(rot * 1.57079632679); // π/2 × steps
+    canvas.translate(-srcW / 2, -srcH / 2);
+    canvas.drawImage(image, Offset.zero, Paint());
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(dstW.toInt(), dstH.toInt());
+    } finally {
+      image.dispose();
+    }
+  }
+
   /// Releases the compiled shader. Call when the renderer is no longer needed.
   void dispose() {
     _shader = null;
+    _shaderFuture = null;
   }
 }
 
@@ -365,10 +443,15 @@ Uint8List packRgb(
 
 /// Applies window-center/window-width rescaling (with the Hounsfield slope /
 /// intercept transform) to [pixels] and packs the result into an RGBA
-/// [Uint8List] (grayscale, alpha=255).
+/// [Uint8List].
 ///
 /// This is the pure, GPU-free math used by the web/CPU rendering fallback.
 /// It is isolated here so it can be unit-tested without a GPU.
+///
+/// When [lut] is supplied it must be 256×4 RGBA bytes (as produced by
+/// [ColorMapLut.generate]) and is indexed by the windowed value; otherwise the
+/// output is grayscale. [invert] inverts the windowed value *before* the LUT
+/// lookup, matching the fragment shader's order of operations.
 ///
 /// [pixelCount] caps the number of pixels processed so that a shorter buffer
 /// is never over-read. Each source pixel maps to 4 output bytes.
@@ -379,17 +462,26 @@ Uint8List applyWindowingRgba(
   required final double windowWidth,
   required final double slope,
   required final double intercept,
+  final Uint8List? lut,
+  final bool invert = false,
 }) {
   final ww = windowWidth.clamp(1.0, 65536.0);
   final low = windowCenter - ww / 2.0;
   final rgbaData = Uint8List(pixelCount * 4);
   for (var i = 0; i < pixelCount && i < pixels.length; i++) {
     final hu = pixels[i].toDouble() * slope + intercept;
-    final norm = ((hu - low) / ww).clamp(0.0, 1.0);
-    final v = (norm * 255.0).round();
-    rgbaData[i * 4 + 0] = v;
-    rgbaData[i * 4 + 1] = v;
-    rgbaData[i * 4 + 2] = v;
+    var norm = ((hu - low) / ww).clamp(0.0, 1.0);
+    if (invert) norm = 1.0 - norm;
+    final idx = (norm * 255.0).round().clamp(0, 255);
+    if (lut != null) {
+      rgbaData[i * 4 + 0] = lut[idx * 4 + 0];
+      rgbaData[i * 4 + 1] = lut[idx * 4 + 1];
+      rgbaData[i * 4 + 2] = lut[idx * 4 + 2];
+    } else {
+      rgbaData[i * 4 + 0] = idx;
+      rgbaData[i * 4 + 1] = idx;
+      rgbaData[i * 4 + 2] = idx;
+    }
     rgbaData[i * 4 + 3] = 255;
   }
   return rgbaData;

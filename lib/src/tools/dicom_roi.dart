@@ -120,8 +120,13 @@ class DicomRoi {
     final sum = values.fold<double>(0, (final a, final b) => a + b);
     final mean = sum / n;
 
-    final variance =
-        values.fold<double>(0, (final a, final b) => a + (b - mean) * (b - mean)) / (n - 1);
+    // Sample variance. A single-pixel ROI has no spread, and dividing by
+    // (n - 1) would yield 0/0 = NaN.
+    final variance = n > 1
+        ? values.fold<double>(
+                0, (final a, final b) => a + (b - mean) * (b - mean)) /
+            (n - 1)
+        : 0.0;
 
     return RoiStatistics._(
       pixelCount: n,

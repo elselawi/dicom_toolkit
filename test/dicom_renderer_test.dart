@@ -157,6 +157,71 @@ void main() {
       expect(out[4], 128);
       expect(out[8], 128);
     });
+
+    test('indexes a supplied color LUT by the windowed value', () {
+      final lut = ColorMapLut.generate(DicomColorMap.hotIron);
+      // wc=100, ww=100 → low=50; value 100 → norm 0.5 → index 128.
+      final out = applyWindowingRgba(
+        [100],
+        1,
+        windowCenter: 100,
+        windowWidth: 100,
+        slope: 1,
+        intercept: 0,
+        lut: lut,
+      );
+      expect(out[0], lut[128 * 4 + 0]);
+      expect(out[1], lut[128 * 4 + 1]);
+      expect(out[2], lut[128 * 4 + 2]);
+      expect(out[3], 255);
+      // Hot iron mid-range is a saturated color, not gray.
+      expect(out[0], isNot(out[1]));
+    });
+
+    test('applies invert before the LUT lookup', () {
+      final lut = ColorMapLut.generate(DicomColorMap.hotIron);
+      // Value 50 is the window low → norm 0 (lut[0], black); inverted → 1
+      // (lut[255], white).
+      final normal = applyWindowingRgba(
+        [50],
+        1,
+        windowCenter: 100,
+        windowWidth: 100,
+        slope: 1,
+        intercept: 0,
+        lut: lut,
+      );
+      final inverted = applyWindowingRgba(
+        [50],
+        1,
+        windowCenter: 100,
+        windowWidth: 100,
+        slope: 1,
+        intercept: 0,
+        lut: lut,
+        invert: true,
+      );
+      expect(normal[0], lut[0]);
+      expect(inverted[0], lut[255 * 4]);
+      expect(normal[0], isNot(inverted[0]));
+    });
+
+    test('invert inverts grayscale output', () {
+      // Value 50 is the window low → 0; inverted → 255.
+      final out = applyWindowingRgba(
+        [50],
+        1,
+        windowCenter: 100,
+        windowWidth: 100,
+        slope: 1,
+        intercept: 0,
+        invert: true,
+      );
+      expect(out[0], 255);
+      expect(out[1], 255);
+      expect(out[2], 255);
+      expect(out[3], 255);
+    });
   });
 
   group('packRgb', () {

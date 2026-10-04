@@ -52,8 +52,12 @@ class DicomViewerController extends ChangeNotifier {
   /// True if the last load operation failed.
   bool get hasError => _errorMessage != null;
 
-  /// True when metadata, texture, and shader are all ready for display.
-  bool get hasData => _result != null && _rawTexture != null && _shader != null;
+  /// True when metadata and a displayable texture are ready.
+  ///
+  /// Does **not** require the fragment shader: on platforms without shader
+  /// support (e.g. web/CanvasKit) the image is windowed on the CPU and shown
+  /// via `RawImage`, so the viewer must still treat it as ready.
+  bool get hasData => _result != null && _rawTexture != null;
 
   /// The last error message, or null if no error.
   String? get errorMessage => _errorMessage;
@@ -61,7 +65,11 @@ class DicomViewerController extends ChangeNotifier {
   /// The parsed DICOM result, or null if nothing loaded.
   DicomParseResult? get result => _result;
 
-  /// The packed 16-bit texture for GPU consumption.
+  /// The image displayed by [DicomViewer].
+  ///
+  /// With a GPU shader available this is the packed 16-bit texture that the
+  /// shader windows at paint time; without one it is a CPU-windowed image
+  /// (windowing, color map, invert and MONOCHROME1 already applied).
   ui.Image? get rawTexture => _rawTexture;
 
   /// The 256×1 color LUT texture, or null for grayscale.
@@ -143,12 +151,27 @@ class DicomViewerController extends ChangeNotifier {
       debugLog('[DART] controller: window L=$_windowCenter W=$_windowWidth');
       debugLog(
           '[DART] controller: creating texture (hasShader=${_shader != null})...');
-      _rawTexture = await _renderer.createTexture(_result!);
+      _rawTexture?.dispose();
+      _rawTexture = null;
+      if (_shader != null) {
+        // GPU path: pack 16-bit into R/G channels; the shader windows at paint.
+        _rawTexture = await _renderer.createTexture(_result!);
+        if (_colorMap != DicomColorMap.grayscale) {
+          await _buildColorLut();
+        }
+      } else {
+        // No GPU shader (e.g. web/CanvasKit): window, colorize and invert on
+        // the CPU so the [DicomViewer] RawImage fallback shows a correct image.
+        _rawTexture = await _renderer.render(
+          _result!,
+          windowCenter: _windowCenter,
+          windowWidth: _windowWidth,
+          colorMap: _colorMap,
+          invert: _invert,
+        );
+      }
       debugLog(
           '[DART] controller: texture created OK, size=${_rawTexture!.width}x${_rawTexture!.height}');
-      if (_colorMap != DicomColorMap.grayscale) {
-        await _buildColorLut();
-      }
     } catch (e, st) {
       debugLog('[DART] controller FAILED: $e');
       debugLog('[DART] stack: $st');
@@ -177,6 +200,7 @@ class DicomViewerController extends ChangeNotifier {
     if (center != null) _windowCenter = center;
     if (width != null) _windowWidth = width.clamp(1.0, 65536.0);
     notifyListeners();
+    unawaited(_refreshCpuTexture());
   }
 
   /// Resets windowing to DICOM header defaults.
@@ -185,6 +209,7 @@ class DicomViewerController extends ChangeNotifier {
     _windowCenter = _result!.metadata.windowCenter;
     _windowWidth = _result!.metadata.windowWidth;
     notifyListeners();
+    unawaited(_refreshCpuTexture());
   }
 
   /// Applies a [DicomWindowPreset] by its center and width.
@@ -195,8 +220,14 @@ class DicomViewerController extends ChangeNotifier {
 
   /// Sets the active color map.
   Future<void> setColorMap(final DicomColorMap map) async {
-    if (_colorMap == map && _colorLutTexture != null) return;
+    if (_colorMap == map) return;
     _colorMap = map;
+
+    if (_shader == null) {
+      // No GPU shader — the color map is baked into the CPU-rendered image.
+      await _refreshCpuTexture();
+      return;
+    }
 
     _colorLutTexture?.dispose();
     _colorLutTexture = null;
@@ -214,6 +245,7 @@ class DicomViewerController extends ChangeNotifier {
   void toggleInvert() {
     _invert = !_invert;
     notifyListeners();
+    unawaited(_refreshCpuTexture());
   }
 
   /// Rotates 90° clockwise. Cycles through 0 → 1 → 2 → 3 → 0.
@@ -231,6 +263,8 @@ class DicomViewerController extends ChangeNotifier {
   /// Clears current data and frees GPU resources.
   void clear() {
     _result = null;
+    // Invalidate any in-flight CPU render so it cannot resurrect the texture.
+    _cpuRenderToken++;
     _rawTexture?.dispose();
     _rawTexture = null;
     _colorLutTexture?.dispose();
@@ -256,7 +290,35 @@ class DicomViewerController extends ChangeNotifier {
 
   bool _disposed = false;
 
+  /// Monotonic token used to discard superseded CPU renders.
+  int _cpuRenderToken = 0;
+
   // --- Internal ---
+
+  /// Regenerates the texture after a display-affecting change on platforms
+  /// without a GPU shader.
+  ///
+  /// No-op when a shader is available (the shader windows at paint time) or
+  /// when nothing is loaded. Concurrent calls are safe: a render that is
+  /// superseded by a newer one is discarded rather than displayed.
+  Future<void> _refreshCpuTexture() async {
+    if (_shader != null || _result == null) return;
+    final token = ++_cpuRenderToken;
+    final image = await _renderer.render(
+      _result!,
+      windowCenter: _windowCenter,
+      windowWidth: _windowWidth,
+      colorMap: _colorMap,
+      invert: _invert,
+    );
+    if (_disposed || token != _cpuRenderToken) {
+      image.dispose();
+      return;
+    }
+    _rawTexture?.dispose();
+    _rawTexture = image;
+    notifyListeners();
+  }
 
   Future<void> _buildColorLut() async {
     final lutBytes = ColorMapLut.generate(_colorMap);

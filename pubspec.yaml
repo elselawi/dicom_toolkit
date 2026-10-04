@@ -1,6 +1,6 @@
 name: dicom_toolkit
 description: "An advanced medical imaging and DICOM processing library for Flutter."
-version: 0.2.10
+version: 0.3.0
 
 repository: https://github.com/elselawi/dicom_toolkit
 homepage: https://dicomtoolkit.pages.dev
@@ -19,7 +19,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_rust_bridge: ^2.12.0
+  # Pinned exactly. The generated bridge (lib/src/rust, rust/src/frb_generated.rs)
+  # and rust/Cargo.toml are all stamped 2.12.0, and flutter_rust_bridge aborts
+  # initialisation when the runtime version differs from the codegen version.
+  # A caret range here resolves to the newest 2.x on a fresh `pub get`, which
+  # breaks every consumer with:
+  #   Bad state: dicom_toolkit's codegen version (2.12.0) should be the same as
+  #   runtime version (2.13.0)
+  flutter_rust_bridge: 2.12.0
 dev_dependencies:
   ffi: ^2.1.3
   ffigen: ^20.1.1
@@ -29,7 +36,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   integration_test:
     sdk: flutter
-  file_picker: ^11.0.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

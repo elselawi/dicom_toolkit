@@ -1,3 +1,77 @@
+## 0.3.0
+
+**Swift Package Manager support, and the iOS/TestFlight initialisation failure is fixed.**
+
+- **(fix)** iOS and macOS: the Rust core is now linked into the **app** target instead of the
+  pod's own target, and protected from dead stripping. The podspec gained a
+  `user_target_xcconfig` with `-force_load .../libdicom_toolkit.a` and
+  `DEAD_CODE_STRIPPING = NO`. Previously the flag sat in `pod_target_xcconfig`, which never
+  reaches the app's link line — and with `use_frameworks! :linkage => :static` (or no
+  `use_frameworks!`) the pod has no link step at all, so the entire Rust core was dropped.
+  Because the FFI entry points are resolved by name at runtime rather than referenced at link
+  time, Release builds then dead-stripped whatever remained. The app compiled and failed at
+  runtime with *"Could not initialize the DICOM engine"* — typically only on a physical
+  device or in Release/TestFlight. Dynamic frameworks and static linkage now both work.
+  `DEAD_CODE_STRIPPING = NO` applies to the consumer's whole app target, so binary size grows
+  slightly; see the README.
+- **(fix)** `DicomToolkit.init()` on iOS/macOS resolves the Rust FFI symbols **from the
+  process image** instead of `dlopen`ing a relative `dicom_toolkit.framework/dicom_toolkit`
+  path, which cannot work inside a packaged app (those images live in the app bundle, not the
+  working directory). It no longer depends on the framework's file name or build layout.
+  Development workflows (`flutter test`, `dart run`) still use the dylib built by
+  `cargo build --release`.
+- **(feat)** Swift Package Manager support for iOS and macOS. Flutter detects a plugin's
+  SwiftPM support from `ios/<plugin_name>/Package.swift` (and `macos/<plugin_name>/`), so a
+  manifest is now shipped for both. SwiftPM cannot build Rust, so the core is a prebuilt
+  **dynamic** XCFramework (`dicom_toolkit.xcframework`, produced by the new
+  `tool/rebuild_xcframework.sh` and committed to git, ~8 MB, no Rust toolchain needed by
+  consumers). It must be dynamic: Flutter links the generated plugin package statically and
+  the FFI symbols are only resolved by name at runtime, so a static library would be
+  dead-stripped. CocoaPods keeps working unchanged, and apps need no `Podfile` at all on the
+  SwiftPM path. **Maintainers: re-run `tool/rebuild_xcframework.sh` and commit the result
+  whenever `rust/src/**` changes**, exactly like `web/pkg` after a WASM rebuild.
+- **(feat)** New `DicomInitializationException`, thrown when the native Rust engine cannot be
+  loaded into the process. It names the cause and the fix instead of surfacing a raw
+  dynamic-library error.
+- **(fix)** Pinned `flutter_rust_bridge` to exactly `2.12.0`. The generated bridge
+  (`lib/src/rust/**`, `rust/src/frb_generated.rs`) and `rust/Cargo.toml` are all stamped
+  2.12.0, but the manifest allowed `^2.12.0`, so a fresh `pub get` resolved 2.13.0 and
+  every consumer aborted at startup with `Bad state: dicom_toolkit's codegen version
+  (2.12.0) should be the same as runtime version (2.13.0)`. The pin is exact because the
+  runtime check is exact.
+- **(fix)** Web/CPU fallback: `DicomViewerController.hasData` no longer requires the
+  fragment shader, so platforms without shader support (web/CanvasKit) render the image
+  instead of showing *"No DICOM data loaded."*. When no shader is available the controller
+  now windows, colorizes and inverts on the CPU, re-rendering on windowing / color-map /
+  invert changes.
+- **(fix)** The no-shader render path (`DicomRenderer.render`) now honours the colour map,
+  invert, MONOCHROME1 and rotation for monochrome images instead of applying windowing
+  only, so CPU output matches the shader. `applyWindowingRgba` gained optional `lut` and
+  `invert` parameters.
+- **(fix)** Shader compilation is attempted at most once. A failed compile — the normal
+  case on web — previously re-loaded the shader asset on every render call, i.e. on every
+  windowing drag frame.
+- **(fix)** `RoiStatistics.stdDev` returns `0` for a single-pixel ROI instead of `NaN`
+  (the sample variance divided by `n - 1`).
+- **(build)** Version alignment: `pubspec.yaml`, `rust/Cargo.toml`, and the committed
+  `rust/pkg` / `web/pkg` wasm-pack manifests all report `0.3.0` (the Rust crate and the WASM
+  manifest had drifted to `0.1.0`). The committed XCFrameworks are stamped with the same
+  version.
+- **(build)** Dropped the unused `file_picker: ^11.0.2` dev-dependency from the root
+  package; only the example uses `file_picker` (currently `^13.1.0`).
+- **(test)** A fresh clone now runs green: the groups in
+  `test/dicom_integration_test.dart` that need the `dcms/` vendor corpus (Carestream /
+  Sirona / Generic XPECT) skip themselves when that directory is absent instead of failing
+  with `PathNotFoundException`, and the Windows-only backslash-path test in
+  `test/dicom_reader_test.dart` now skips off Windows. Local result: 283 passed, 25 skipped
+  (was 286 passed / 22 failed).
+- **(docs)** AGENTS.md: documented the `u_is_rgb` shader uniform (index 9), the missing
+  `dicom_controller_test.dart` entry, the new `lib/src/platform/` loaders, and a new
+  *Apple integration* section (both dependency managers, the XCFramework rebuild rule, the
+  `FlutterFramework` warning).
+- **(build)** iOS example deployment target raised to 14.0 (`file_picker_darwin` requires
+  it); it was already 14.0+ for the plugin itself.
+
 ## 0.2.10
 
 **Android build configuration: AGP 9-ready and AGP 10-proof. Consumers can delete their

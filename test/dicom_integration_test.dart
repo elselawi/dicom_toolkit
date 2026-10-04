@@ -18,6 +18,13 @@ Uint8List _bytesOf(final String path) => File(path).readAsBytesSync();
 /// Deliberately invalid DICOM data.
 final _corruptBytes = Uint8List.fromList(List.filled(16, 0));
 
+/// The `dcms/` vendor corpus (Carestream / Sirona / Generic XPECT) is not
+/// distributed with the repository. Groups that need it are skipped instead of
+/// failing, so a fresh clone has a green suite; drop the files into `dcms/` to
+/// run them.
+final _skipVendorCorpus =
+    Directory('dcms').existsSync() ? null : 'requires the dcms/ vendor corpus';
+
 void main() {
   // ─── Setup ────────────────────────────────────────────────
   setUpAll(() async {
@@ -155,7 +162,7 @@ void main() {
   // ──────────────────────────────────────────────────────────
   // GROUP 4.5 — Spatial & volumetric metadata
   // ──────────────────────────────────────────────────────────
-  group('Spatial & volumetric metadata', () {
+  group('Spatial & volumetric metadata', skip: _skipVendorCorpus, () {
     late DicomParser parser;
 
     setUp(() {
@@ -223,7 +230,8 @@ void main() {
   // Files must be present in the dcms/ directory.
   // ──────────────────────────────────────────────────────────
 
-  group('Vendor files — Carestream (JPEG Lossless, MONOCHROME1)', () {
+  group('Vendor files — Carestream (JPEG Lossless, MONOCHROME1)',
+      skip: _skipVendorCorpus, () {
     late DicomParser parser;
 
     setUp(() {
@@ -285,7 +293,8 @@ void main() {
     });
   });
 
-  group('Vendor files — Generic XPECT (uncompressed, MONOCHROME2)', () {
+  group('Vendor files — Generic XPECT (uncompressed, MONOCHROME2)',
+      skip: _skipVendorCorpus, () {
     late DicomParser parser;
 
     setUp(() {
@@ -341,7 +350,8 @@ void main() {
     });
   });
 
-  group('Vendor files — Sirona (uncompressed, large dimensions)', () {
+  group('Vendor files — Sirona (uncompressed, large dimensions)',
+      skip: _skipVendorCorpus, () {
     late DicomParser parser;
 
     setUp(() {
@@ -382,7 +392,8 @@ void main() {
   //  useless DICOM header values)
   // ──────────────────────────────────────────────────────────
 
-  group('DicomWindowPreset.forImage — pixel-data-driven presets', () {
+  group('DicomWindowPreset.forImage — pixel-data-driven presets',
+      skip: _skipVendorCorpus, () {
     late DicomParser parser;
 
     setUp(() {

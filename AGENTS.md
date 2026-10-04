@@ -6,7 +6,7 @@
 
 - **License**: GPL v3 — forked from [MostafaSensei106/Flutter-Dicom](https://github.com/MostafaSensei106/Flutter-Dicom)
 - **Platforms**: Android, iOS, Linux, macOS, Windows, Web (WASM)
-- **Version**: `0.2.10`
+- **Version**: `0.3.0`
 
 ---
 
@@ -15,7 +15,11 @@
 ```
 lib/
   dicom_toolkit.dart                 ← barrel: exports + DicomToolkit class
+  dicom_toolkit_web.dart             ← no-op web plugin registration (WASM is loaded by FRB)
   src/
+    platform/
+      rust_library_web.dart          ← web init: loads WASM from the Flutter asset path
+      rust_library_io.dart           ← native init; iOS/macOS resolve statically linked symbols
     backend/
       dicom_decoder.dart             ← DicomDecoder (abstract) + RustDecoder (FFI impl)
     core/
@@ -67,6 +71,13 @@ assets/shaders/dicom_window.frag    ← GLSL: 16-bit unpack + HU + windowing + L
 
 web/pkg/                            ← WASM + JS bindings (wasm-pack output, committed to git)
 
+ios/
+  dicom_toolkit.podspec             ← CocoaPods integration (cargokit script phase)
+  dicom_toolkit/Package.swift       ← Swift Package Manager integration
+  dicom_toolkit/dicom_toolkit.xcframework/  ← prebuilt *dynamic* Rust core (committed)
+
+macos/                              ← same three pieces as ios/
+
 test/
   dicom_tag_id_test.dart            ← 31 constants, equality, hex
   dicom_pixel_data_test.dart        ← sealed hierarchy, buffer
@@ -80,11 +91,13 @@ test/
   dicom_renderer_test.dart          ← pack16Bit + applyWindowingRgba helpers
   dicom_color_map_lut_test.dart     ← ColorMapLut.generate for every map
   dicom_export_test.dart            ← PNG export + failure-path disposal
-  dicom_viewer_controller_test.dart ← state lifecycle, error paths
+  dicom_viewer_controller_test.dart ← state lifecycle, error paths, CPU fallback
+  dicom_controller_test.dart        ← controller lifecycle + windowing defaults
   dicom_viewer_test.dart            ← widget states (loading, error, empty)
   dicom_exceptions_test.dart        ← DicomException hierarchy
   features_test.dart                ← cross-tool integration
-  dicom_integration_test.dart       ← real .dcm files via parser
+  dicom_integration_test.dart       ← real .dcm files via parser (dcms/ corpus
+                                       groups self-skip when dcms/ is absent)
   dicom_reader_test.dart            ← readDicomInfo() with real files
 ```
 
@@ -92,12 +105,26 @@ test/
 
 ## Data Flow
 
-1. `DicomToolkit.init()` — loads native library / WASM
+1. `DicomToolkit.init()` — loads the native library / WASM via `src/platform/rust_library_io.dart`
+   or `rust_library_web.dart`:
+   - Android/Windows/Linux: `RustLib.init()` → packaged shared library.
+   - **iOS/macOS: the FFI symbols are resolved from the process image** — see
+     `_initializeApple`. They are looked up by name at runtime, so there is nothing to
+     `dlopen` by path, and the same code works whether the Rust core lives in the app
+     binary or in an embedded framework. Under **CocoaPods** the podspecs inject the Rust
+     archive into the *app* target with `-force_load` plus `DEAD_CODE_STRIPPING = NO` (in
+     `user_target_xcconfig`, because `pod_target_xcconfig` never reaches the app link);
+     without both, Release builds silently drop the whole Rust core. Under **Swift Package
+     Manager** the symbols come from the committed dynamic `dicom_toolkit.xcframework`
+     instead, so no codegen or force-linking happens at all (see *Apple integration*).
+     The `cargo build --release` dylib is used when running from source. If nothing can be
+     loaded, `DicomInitializationException` is thrown.
+   - Web: WASM from the Flutter asset path.
 2. `DicomParser.parse(bytes)` → `DicomDecoder.decode()` → `loadDicomFromBytes()` FFI
 3. Rust `process_dicom_file.rs`: opens DICOM, extracts 37 tags + pixel spacing (with Imager Pixel Spacing fallback for X-ray), extracts `Vec<i16>` pixels (first frame only via dual-path: raw bytes for uncompressed, decoder for compressed)
 4. `DicomParseResult.fromFrame()`: wraps generated metadata → `DicomMetadata` wrapper, packs pixels → `DicomInt16PixelData`
-5. `DicomRenderer`: compiles GLSL shader, packs 16-bit → RGBA (+32768 offset), renders via `PictureRecorder` → `ui.Image`
-6. `DicomViewer`: `CustomPaint` → `DicomShaderPainter` → shader (windowing + HU + color LUT), wrapped in `Transform.rotate`
+5. `DicomRenderer`: compiles GLSL shader, packs 16-bit → RGBA (+32768 offset), renders via `PictureRecorder` → `ui.Image`. Without a shader it falls back to `_renderCpu` (windowing + color map + invert + MONOCHROME1 + rotation in Dart).
+6. `DicomViewer`: `CustomPaint` → `DicomShaderPainter` → shader (windowing + HU + color LUT), wrapped in `Transform.rotate`. With no shader it renders `controller.rawTexture` (the CPU-windowed image) via `RawImage`.
 
 ---
 
@@ -128,6 +155,7 @@ R=high byte, G=low byte, +32768 offset → shader reverses to full 16-bit signed
 | 6 | `u_colorize` (flag) |
 | 7 | `u_invert` (flag) |
 | 8 | `u_monochrome1` (flag) |
+| 9 | `u_is_rgb` (flag — 1.0 = direct RGB, 0.0 = packed 16-bit monochrome) |
 | sampler 0 | `u_texture` (RGBA-packed image) |
 | sampler 1 | `u_color_lut` (256×1 LUT or dummy) |
 
@@ -146,6 +174,11 @@ cargo build && cargo build --release
 .\tool\rebuild_wasm.ps1        # debug (fast compile)
 .\tool\rebuild_wasm.ps1 -Release  # release (smaller .wasm)
 
+# Build the Apple XCFrameworks (Swift Package Manager) — commit the result:
+tool/rebuild_xcframework.sh          # both
+tool/rebuild_xcframework.sh ios      # iOS only
+tool/rebuild_xcframework.sh macos    # macOS only
+
 # Tests
 flutter test
 
@@ -160,7 +193,8 @@ dart run tool/agp_newdsl_probe.dart
 1. `flutter_rust_bridge_codegen generate`
 2. `cargo build && cargo build --release`
 3. If web: `.\tool\rebuild_wasm.ps1`
-4. `flutter clean` in example if running there
+4. If Apple (iOS/macOS): `tool/rebuild_xcframework.sh` and commit the updated folders
+5. `flutter clean` in example if running there
 
 ### Web WASM artifacts
 
@@ -176,6 +210,52 @@ When you modify `rust/src/`, rebuild with `.\tool\rebuild_wasm.ps1` and commit
 the updated `web/pkg/` and `rust/pkg/` files. The script also strips the
 `.gitignore` that `wasm-pack` creates (which would otherwise block the files) and
 copies artifacts to all required locations.
+
+### Apple integration (iOS + macOS)
+
+Both platforms are supported through **two independent paths**, and both are
+tested:
+
+| Path | Trigger | Rust core comes from |
+|------|---------|----------------------|
+| Swift Package Manager | `ios/dicom_toolkit/Package.swift` exists (SPM is on by default in recent Flutter) | `dicom_toolkit.xcframework` |
+| CocoaPods | app has a `Podfile` and SPM cannot be used | cargokit builds/links the Rust staticlib |
+
+`Package.swift` is enough for Flutter to detect SPM support — it declares
+`swift-tools-version: 5.9` (Flutter's minimum) and a single
+`.binaryTarget(name: "dicom_toolkit", path: "dicom_toolkit.xcframework")`.
+SPM cannot compile Rust, so the core ships as a **prebuilt dynamic
+XCFramework** committed to git (`tool/rebuild_xcframework.sh` produces it for
+`aarch64-apple-ios`, an `aarch64-apple-ios-sim` + `x86_64-apple-ios` simulator
+slice, and a universal `arm64`+`x86_64` macOS slice). It must be *dynamic*,
+not static: Flutter links the generated plugin package statically, and a static
+Rust archive gets dead-stripped because the FFI symbols are only looked up by
+name at runtime.
+
+> Building the **example app** prints
+> `Plugin dicom_toolkit has a Package.swift for ios but is missing a dependency on
+> FlutterFramework`. That check looks for the literal string `FlutterFramework` in
+> the manifest, and is only run for a plugin's own example app — consumers never
+> see it. It does not apply here: the plugin has no Swift/ObjC target that
+> `import Flutter`, and `binaryTarget` cannot declare dependencies. Do **not**
+> add `.package(path: "../FlutterFramework")` just to silence it: that path only
+> exists for a plugin built from its own checkout, so it would break consumers
+> resolving this plugin from the pub cache. Flutter's own first-party plugins
+> with `Package.swift` (e.g. `url_launcher_ios`) omit it too.
+
+Because the Rust core can end up either inside the app binary (CocoaPods
+static linkage) or inside an embedded framework (SPM), the Dart side resolves
+symbols in this order — see `lib/src/platform/rust_library_io.dart`:
+
+1. `DynamicLibrary.process()` — searches every loaded image, so it works in
+   both layouts. Guarded by a probe for `frb_get_rust_content_hash` so a
+   partially-loaded library isn't mistaken for a valid one.
+2. `flutter_rust_bridge`'s own loader (dev-only `rust/target/release/*.dylib`).
+3. Throw `DicomInitializationException` with a remediation hint.
+
+`DEAD_CODE_STRIPPING = NO` is set in `user_target_xcconfig` by both podspecs,
+but only matters on the CocoaPods path when the Rust code lands in the app
+binary. Note this is applied app-wide, not to a single pod.
 
 ---
 
@@ -253,3 +333,5 @@ is a Gradle-10 error, not an AGP deprecation.
 5. **SSE vs DCO codec** — `flutter test` uses DCO (VM FFI), `flutter run` uses SSE (serialized). Both need matching DLLs
 6. **SSE large-data bottleneck** — on web, SSE copies every `List<int>` arg JS→WASM (150+ MB = seconds + ~2 GB RAM). DCO (zero-copy) is available when `crossOriginIsolated: true` but flutter_rust_bridge 2.12 codegen doesn't emit it — see [upstream issue]
 7. **Web shader fallback** — `FragmentProgram.fromAsset()` unsupported on CanvasKit; renderer catches compile failure and falls back to CPU windowing via `RawImage`
+8. **Stale XCFramework** — after any `rust/src/` change, run `tool/rebuild_xcframework.sh` and commit `ios/dicom_toolkit/dicom_toolkit.xcframework/` + `macos/dicom_toolkit/dicom_toolkit.xcframework/`; SPM builds run no codegen and will silently keep the old binary otherwise
+9. **iOS FFI symbols dead-stripped** — the Rust symbols must survive linking; never let `-dead_strip` remove them (see *Apple integration* above)

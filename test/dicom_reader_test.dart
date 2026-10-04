@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
 
+import 'dart:io' show Platform;
+
 import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -177,7 +179,10 @@ void main() {
       final info = await readDicomInfo(r'test\test-1.dcm');
       expect(info.fileName, 'test-1.dcm');
       expect(info.filePath, r'test\test-1.dcm');
-    });
+    },
+        skip: Platform.isWindows
+            ? null
+            : 'backslash is a path separator only on Windows');
 
     test('fileName extracts correctly from Unix-style paths', () async {
       final info = await readDicomInfo('test/test-1.dcm');

@@ -255,4 +255,38 @@ void main() {
       expect(stats.max, closeTo(149.685, 0.01));
     });
   });
+
+  group('RoiStatistics stdDev edge cases', () {
+    test('single-pixel ROI reports zero stdDev, not NaN', () {
+      final result = _buildResult(
+        width: 1,
+        height: 1,
+        pixels: Int16List.fromList([42]),
+      );
+
+      final stats = const DicomRoi(x: 0, y: 0, width: 1, height: 1)
+          .compute(result);
+
+      expect(stats.pixelCount, 1);
+      expect(stats.mean, 42);
+      // The variance divisor is (n - 1); with n == 1 that would be 0/0 = NaN.
+      expect(stats.stdDev.isNaN, isFalse);
+      expect(stats.stdDev, 0);
+    });
+
+    test('two-pixel ROI uses the sample (n - 1) variance', () {
+      final result = _buildResult(
+        width: 2,
+        height: 1,
+        pixels: Int16List.fromList([10, 20]),
+      );
+
+      final stats = const DicomRoi(x: 0, y: 0, width: 2, height: 1)
+          .compute(result);
+
+      expect(stats.mean, 15);
+      // sample variance = ((10-15)^2 + (20-15)^2) / 1 = 50 → sqrt(50)
+      expect(stats.stdDev, closeTo(7.0711, 0.001));
+    });
+  });
 }

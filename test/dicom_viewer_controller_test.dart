@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dicom_toolkit/dicom_toolkit.dart';
 import 'package:dicom_toolkit/src/rust/api/core/models/dicom_metadata.dart'
@@ -11,6 +13,19 @@ import 'package:mocktail/mocktail.dart';
 class MockDicomParser extends Mock implements DicomParser {}
 
 class MockDicomRenderer extends Mock implements DicomRenderer {}
+
+class MockImage extends Mock implements ui.Image {}
+
+/// Creates a mock [ui.Image] with the given dimensions.
+///
+/// The controller reads `width`/`height` when logging, so they must be stubbed
+/// to avoid a null-cast error.
+MockImage _mockImage({final int width = 4, final int height = 4}) {
+  final image = MockImage();
+  when(() => image.width).thenReturn(width);
+  when(() => image.height).thenReturn(height);
+  return image;
+}
 
 /// Builds a minimal DicomParseResult for testing.
 DicomParseResult _buildResult({
@@ -74,6 +89,11 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(Uint8List(0));
+    registerFallbackValue(_buildResult());
+    registerFallbackValue(DicomColorMap.grayscale);
+    registerFallbackValue(0);
+    registerFallbackValue(0.0);
+    registerFallbackValue(false);
   });
 
   setUp(() {
@@ -382,6 +402,76 @@ void main() {
       // center should be near 0, not 100 (the header value).
       expect(computedCenter, isNot(closeTo(100.0, 0.1)));
       expect(computedWidth, isNot(closeTo(200.0, 0.1)));
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // Platforms without fragment-shader support (e.g. web) must
+  // still report data as displayable and render on the CPU.
+  // ──────────────────────────────────────────────────────────
+
+  group('DicomViewerController — CPU fallback (no GPU shader)', () {
+    /// Stubs the renderer for a shader-less platform: `shader` resolves to
+    /// null and `render` returns [image].
+    void stubCpuRenderer(final MockImage image) {
+      when(() => mockRenderer.shader).thenAnswer((final _) async => null);
+      when(() => mockRenderer.render(
+            any(),
+            windowCenter: any(named: 'windowCenter'),
+            windowWidth: any(named: 'windowWidth'),
+            colorMap: any(named: 'colorMap'),
+            invert: any(named: 'invert'),
+            rotationSteps: any(named: 'rotationSteps'),
+          )).thenAnswer((final _) async => image);
+    }
+
+    test('hasData is true and the CPU image is exposed when no shader exists',
+        () async {
+      final image = _mockImage();
+      stubCpuRenderer(image);
+      when(() => mockParser.parse(any()))
+          .thenAnswer((final _) async => _buildResult());
+
+      await controller.loadFromBytes(bytes: Uint8List(1));
+
+      expect(controller.hasError, isFalse);
+      expect(controller.shader, isNull);
+      expect(controller.hasShader, isFalse);
+      expect(controller.rawTexture, same(image));
+      expect(controller.hasData, isTrue);
+    });
+
+    test('windowing changes regenerate the CPU image', () async {
+      final first = _mockImage();
+      final second = _mockImage();
+      when(() => mockRenderer.shader).thenAnswer((final _) async => null);
+      when(() => mockRenderer.render(
+            any(),
+            windowCenter: any(named: 'windowCenter'),
+            windowWidth: any(named: 'windowWidth'),
+            colorMap: any(named: 'colorMap'),
+            invert: any(named: 'invert'),
+            rotationSteps: any(named: 'rotationSteps'),
+          )).thenAnswer((final _) async => first);
+      when(() => mockParser.parse(any()))
+          .thenAnswer((final _) async => _buildResult());
+
+      await controller.loadFromBytes(bytes: Uint8List(1));
+      expect(controller.rawTexture, same(first));
+
+      when(() => mockRenderer.render(
+            any(),
+            windowCenter: any(named: 'windowCenter'),
+            windowWidth: any(named: 'windowWidth'),
+            colorMap: any(named: 'colorMap'),
+            invert: any(named: 'invert'),
+            rotationSteps: any(named: 'rotationSteps'),
+          )).thenAnswer((final _) async => second);
+
+      controller.updateWindowing(center: 10, width: 20);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.rawTexture, same(second));
     });
   });
 }

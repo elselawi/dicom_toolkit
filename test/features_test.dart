@@ -99,8 +99,10 @@ void main() {
       const roi = DicomRoi(x: 0, y: 0, width: 1, height: 1);
 
       final stats = roi.compute(result);
-      // variance = 0 / 0 = NaN for n=1
-      expect(stats.stdDev.isNaN, isTrue);
+      // A single pixel has no spread. The (n - 1) divisor would be 0/0 = NaN,
+      // so n == 1 must short-circuit to 0.
+      expect(stats.stdDev.isNaN, isFalse);
+      expect(stats.stdDev, 0);
     });
 
     test('ROI partially inside image (right edge)', () {

@@ -350,6 +350,52 @@ Alternatively, use this launch configuration to serve from VS Code:
 
 ---
 
+## iOS and macOS
+
+`DicomToolkit.init()` works on iOS and macOS exactly as it does on Android:
+
+```dart
+await DicomToolkit.init();
+```
+
+You do **not** need to edit the `Podfile`, add linker flags, or load the Rust library
+yourself. Both dependency managers are supported, and both linkage modes work:
+
+* **Swift Package Manager** — the Flutter default. Flutter finds
+  [`ios/dicom_toolkit/Package.swift`](ios/dicom_toolkit/Package.swift) (and the macOS
+  equivalent) and links the prebuilt Rust XCFramework. No CocoaPods needed.
+* **CocoaPods** — used when Swift Package Manager is disabled, or on Flutter versions
+  without it. Works with dynamic frameworks (`use_frameworks!`) *and* static linkage.
+
+**How it works.** `init()` resolves the Rust FFI symbols **from the process image**, so it
+does not depend on any file name or build layout.
+
+| Path | What ships | Why |
+|------|-----------|-----|
+| Swift Package Manager | `ios/dicom_toolkit/dicom_toolkit.xcframework` (prebuilt, **dynamic**) | SwiftPM cannot build Rust, so the core is a binary target. It must be *dynamic*: the FFI entry points are resolved by name at runtime, so a static library would be dead-stripped out of the app. |
+| CocoaPods | `cargokit/build_pod.sh` builds the core during the Xcode build | It is injected into **your app target** with `-force_load` plus `DEAD_CODE_STRIPPING = NO`, because `pod_target_xcconfig` never reaches the app's link line and, with static linkage, the pod has no link step at all. |
+
+> ⚠️ **Rebuilding the XCFrameworks.** Like `web/pkg`, they are committed so consumers need no
+> Rust toolchain. Run `tool/rebuild_xcframework.sh` and commit the result whenever
+> `rust/src/**` changes — otherwise Swift Package Manager users silently keep the previous
+> engine.
+
+> **About `DEAD_CODE_STRIPPING = NO`** (CocoaPods path only): it applies to your whole app
+> target, not just to dicom_toolkit, so binary size grows slightly. If it is removed,
+> `DicomToolkit.init()` throws `DicomInitializationException` rather than failing obscurely.
+
+### Requirements
+
+| Component | Supported | Notes |
+|-----------|-----------|-------|
+| iOS deployment target | ≥ 11.0 | The podspec declares 11.0; higher targets (e.g. 16.6) are fine |
+| macOS deployment target | ≥ 10.14 | |
+| Xcode | ≥ 15 | Tested with Xcode 26.5 |
+| Swift Package Manager | ✅ | Flutter's default; no CocoaPods required |
+| CocoaPods | ≥ 1.11 | Only used when Swift Package Manager is unavailable/disabled |
+
+---
+
 ## Android build requirements
 
 dicom_toolkit ships its Android library as a normal Gradle subproject that compiles a Rust

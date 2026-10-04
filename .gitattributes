@@ -17,3 +17,10 @@ cargokit/build_pod.sh text eol=lf
 *.png binary
 *.jpg binary
 *.jpeg binary
+
+# Prebuilt Apple XCFrameworks (Swift Package Manager) — see
+# tool/rebuild_xcframework.sh
+*.xcframework binary
+*.xcframework/** binary
+*.dylib binary
+*.a binary

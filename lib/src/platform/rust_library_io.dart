@@ -47,7 +47,7 @@ Future<void> _initializeApple() async {
     final library =
         await loadExternalLibrary(RustLib.kDefaultExternalLibraryLoaderConfig);
     if (_exportsRustCore(library)) {
-      return RustLib.init(externalLibrary: library);
+      return await RustLib.init(externalLibrary: library);
     }
   } catch (e) {
     debugLog('[DART] Could not load a dynamic Rust library: $e');

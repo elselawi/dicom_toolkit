@@ -1,3 +1,29 @@
+## 0.3.1
+
+**macOS builds for consumers are fixed: the published SwiftPM XCFramework was unusable.**
+
+- **(fix)** macOS: ship a *flat* `dicom_toolkit.framework` in
+  `macos/dicom_toolkit/dicom_toolkit.xcframework`. 0.3.0 used the versioned layout
+  (`Versions/Current` plus the top-level `dicom_toolkit` and `Resources` symlinks), but
+  `dart pub publish` dereferences symlinks inside the package, so consumers received
+  duplicated real directories and files with **no symlinks at all**. Xcode then failed to sign
+  the embedded framework:
+
+  ```
+  Couldn't resolve framework symlink for '.../dicom_toolkit.framework/Versions/Current':
+  ... NSPOSIXErrorDomain Code=22 "Invalid argument"
+  apexo.app: code object is not signed at all
+  In subcomponent: .../Contents/Frameworks/dicom_toolkit.framework
+  Command CodeSign failed with a nonzero exit code
+  ```
+
+  so **any app embedding the plugin failed to build**. iOS was unaffected because its
+  framework was already flat. The framework is now flat too, matching iOS, and needs no
+  symlinks — the install name (`@rpath/dicom_toolkit.framework/dicom_toolkit`) and the
+  compiled Rust core are unchanged, only the bundle layout.
+- **(fix)** `tool/rebuild_xcframework.sh` now fails if a built XCFramework contains any
+  symlink, so this cannot regress unnoticed.
+
 ## 0.3.0
 
 **Swift Package Manager support, and the iOS/TestFlight initialisation failure is fixed.**

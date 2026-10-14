@@ -33,13 +33,12 @@ ROOT="$(pwd -P)"
 LIB_NAME="dicom_toolkit"
 BUNDLE_ID="dev.dicomtoolkit.dicom-toolkit"
 MIN_IOS="11.0"
-MIN_MACOS="10.14"
 VERSION="$(sed -n 's/^version: *//p' pubspec.yaml | head -1)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
 
-# Keep the install name stable so Xcode can embed the framework and dyld can
-# resolve it from the app bundle.
-export RUSTFLAGS="-C link-arg=-Wl,-install_name,@rpath/$LIB_NAME.framework/$LIB_NAME"
+# The install name is set per platform in build_ios/build_macos; it has to match
+# the artifact Xcode embeds, so that dyld resolves it from the app bundle via
+# @rpath.
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -71,39 +70,44 @@ make_ios_framework() {
 PLIST
 }
 
-# Wraps a dylib in a versioned .framework (macOS layout: macOS does not use
-# shallow bundles, so Info.plist must live under Versions/Current/Resources).
-make_macos_framework() {
-  dylib="$1"
-  out="$2"
-  mkdir -p "$out/Versions/A/Resources"
-  cp "$dylib" "$out/Versions/A/$LIB_NAME"
-  chmod +w "$out/Versions/A/$LIB_NAME"
-  ln -sf A "$out/Versions/Current"
-  ln -sf Versions/Current/$LIB_NAME "$out/$LIB_NAME"
-  ln -sf Versions/Current/Resources "$out/Resources"
-  cat > "$out/Versions/A/Resources/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleExecutable</key><string>$LIB_NAME</string>
-  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>$LIB_NAME</string>
-  <key>CFBundlePackageType</key><string>FMWK</string>
-  <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
-  <key>CFBundleVersion</key><string>$VERSION</string>
-  <key>LSMinimumSystemVersion</key><string>$MIN_MACOS</string>
-</dict>
-</plist>
-PLIST
+# macOS has no shallow-framework support — Xcode rejects a framework whose
+# Info.plist is not at `Versions/Current/Resources/Info.plist`:
+#
+#   error: Framework ... contains Info.plist, expected
+#   Versions/Current/Resources/Info.plist since the platform does not use
+#   shallow bundles
+#
+# So a macOS framework is necessarily versioned, which means `Versions/Current`
+# plus the top-level `Foo` and `Resources` symlinks. `dart pub publish`
+# dereferences every symlink in the package, so those reach consumers as
+# duplicated real directories and files, Xcode cannot resolve `Versions/Current`,
+# and codesign refuses to sign the embedded framework:
+#
+#   Couldn't resolve framework symlink for '.../Versions/Current'
+#   apexo.app: code object is not signed at all
+#   In subcomponent: .../Contents/Frameworks/dicom_toolkit.framework
+#   Command CodeSign failed with a nonzero exit code
+#
+# A framework therefore cannot be published intact. macOS ships a plain dylib
+# instead: it contains no symlinks, survives publication byte for byte, and
+# Xcode embeds and signs it like any other dynamic library. iOS is unaffected —
+# its framework is shallow by design.
+
+# `dart pub publish` dereferences symlinks inside the package, so nothing a
+# consumer relies on may depend on them. Fail loudly if a slice contains one,
+# rather than shipping a framework that only breaks once published.
+verify_no_symlinks() {
+  if find "$1" -type l | grep -q .; then
+    echo "error: $1 contains symlinks, which 'dart pub publish' dereferences." >&2
+    echo "       Build artifacts without symlinks instead (see make_ios_framework / build_macos)." >&2
+    exit 1
+  fi
 }
 
 build_ios() {
   echo "== iOS =="
+  # iOS frameworks are shallow bundles and survive `dart pub publish` intact.
+  export RUSTFLAGS="-C link-arg=-Wl,-install_name,@rpath/$LIB_NAME.framework/$LIB_NAME"
   for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
     echo "-- cargo build --release --target $target"
     (cd rust && cargo build --release --target "$target")
@@ -124,27 +128,29 @@ build_ios() {
     -framework "$WORK_DIR/ios-arm64/$LIB_NAME.framework" \
     -framework "$WORK_DIR/ios-arm64_x86_64-simulator/$LIB_NAME.framework" \
     -output "ios/$LIB_NAME/$LIB_NAME.xcframework"
+  verify_no_symlinks "ios/$LIB_NAME/$LIB_NAME.xcframework"
 }
 
 build_macos() {
   echo "== macOS =="
+  # See the note above: macOS cannot use a framework here, so the Rust core is
+  # shipped as a plain dynamic library.
+  export RUSTFLAGS="-C link-arg=-Wl,-install_name,@rpath/lib$LIB_NAME.dylib"
   for target in aarch64-apple-darwin x86_64-apple-darwin; do
     echo "-- cargo build --release --target $target"
     (cd rust && cargo build --release --target "$target")
   done
 
   lipo -create \
-    -output "$WORK_DIR/macos.dylib" \
+    -output "$WORK_DIR/lib$LIB_NAME.dylib" \
     "rust/target/aarch64-apple-darwin/release/lib$LIB_NAME.dylib" \
     "rust/target/x86_64-apple-darwin/release/lib$LIB_NAME.dylib"
 
-  make_macos_framework "$WORK_DIR/macos.dylib" \
-    "$WORK_DIR/macos-arm64_x86_64/$LIB_NAME.framework"
-
   rm -rf "macos/$LIB_NAME/$LIB_NAME.xcframework"
   xcodebuild -create-xcframework \
-    -framework "$WORK_DIR/macos-arm64_x86_64/$LIB_NAME.framework" \
+    -library "$WORK_DIR/lib$LIB_NAME.dylib" \
     -output "macos/$LIB_NAME/$LIB_NAME.xcframework"
+  verify_no_symlinks "macos/$LIB_NAME/$LIB_NAME.xcframework"
 }
 
 case "${1:-all}" in

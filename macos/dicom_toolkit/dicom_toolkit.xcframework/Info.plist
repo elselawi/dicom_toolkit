@@ -6,11 +6,11 @@
 	<array>
 		<dict>
 			<key>BinaryPath</key>
-			<string>dicom_toolkit.framework/Versions/A/dicom_toolkit</string>
+			<string>libdicom_toolkit.dylib</string>
 			<key>LibraryIdentifier</key>
 			<string>macos-arm64_x86_64</string>
 			<key>LibraryPath</key>
-			<string>dicom_toolkit.framework</string>
+			<string>libdicom_toolkit.dylib</string>
 			<key>SupportedArchitectures</key>
 			<array>
 				<string>arm64</string>
